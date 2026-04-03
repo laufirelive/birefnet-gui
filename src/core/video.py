@@ -74,11 +74,19 @@ class ProResWriter:
             stderr=subprocess.PIPE,
         )
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
     def write_frame(self, rgba_frame: np.ndarray):
         """Write one RGBA uint8 frame. Shape must be (height, width, 4)."""
-        assert rgba_frame.shape == (self._height, self._width, 4), (
-            f"Expected ({self._height}, {self._width}, 4), got {rgba_frame.shape}"
-        )
+        if rgba_frame.shape != (self._height, self._width, 4):
+            raise ValueError(
+                f"Expected frame shape ({self._height}, {self._width}, 4), got {rgba_frame.shape}"
+            )
         self._process.stdin.write(rgba_frame.tobytes())
 
     def close(self):
