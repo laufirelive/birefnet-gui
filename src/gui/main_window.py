@@ -33,6 +33,7 @@ from src.core.inference import detect_device
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import QueueTask
 from src.core.video import get_video_info
+from src.gui.queue_tab import QueueTab
 from src.worker.matting_worker import MattingWorker
 
 # Path to bundled models directory (relative to project root)
@@ -236,12 +237,13 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(left_panel, stretch=2)
         main_layout.addLayout(right_panel, stretch=1)
 
-        # --- Tab 2: Queue (placeholder, replaced by QueueTab in Task 7) ---
-        self._queue_placeholder = QWidget()
-        placeholder_layout = QVBoxLayout(self._queue_placeholder)
-        placeholder_layout.addWidget(QLabel("队列功能即将上线..."))
-        placeholder_layout.addStretch()
-        self._tabs.addTab(self._queue_placeholder, self._get_queue_tab_title())
+        # --- Tab 2: Queue ---
+        self._queue_tab = QueueTab(self._queue_manager, self._get_config)
+        self._queue_tab.queue_running_changed.connect(self._on_queue_running_changed)
+        self._queue_tab.task_count_changed.connect(
+            lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
+        )
+        self._tabs.addTab(self._queue_tab, self._get_queue_tab_title())
 
     def _populate_model_combo(self):
         """Populate model dropdown. Only show downloaded models as enabled."""
@@ -585,7 +587,7 @@ class MainWindow(QMainWindow):
         )
         self._queue_manager.add_task(task)
         self._queue_manager.save()
-        self._update_queue_tab_title()
+        self._queue_tab.refresh()
 
         # Clear input for next add
         self._input_path = None
@@ -598,9 +600,22 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage("已加入队列", 3000)
 
+    def _on_queue_running_changed(self, running: bool):
+        """Disable single-task controls when queue is running."""
+        if running:
+            self._start_btn.setEnabled(False)
+            self._select_btn.setEnabled(False)
+            self._enqueue_btn.setEnabled(False)
+        else:
+            # Restore based on current state
+            self._set_state(self._state)
+
     def closeEvent(self, event):
         self._queue_manager.save()
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._worker.wait()
+        if hasattr(self, '_queue_tab') and self._queue_tab._current_worker:
+            self._queue_tab._current_worker.cancel()
+            self._queue_tab._current_worker.wait()
         event.accept()
