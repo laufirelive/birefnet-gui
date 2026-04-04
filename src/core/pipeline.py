@@ -6,7 +6,7 @@ from typing import Callable, Optional
 from src.core.cache import MaskCacheManager
 from src.core.compositing import compose_frame
 from src.core.config import ProcessingConfig
-from src.core.inference import detect_device, get_model_path, load_model, predict
+from src.core.inference import detect_device, get_model_path, load_model, predict, predict_batch
 from src.core.video import FrameReader, get_video_info
 from src.core.writer import create_writer
 
@@ -40,10 +40,15 @@ class MattingPipeline:
 
         cache.save_metadata(task_id, video_info)
 
+        batch_size = self._config.batch_size
+        resolution = self._config.inference_resolution.value
+
+        batch_frames = []
+        batch_indices = []
+
         for idx, frame in enumerate(FrameReader(input_path)):
             if idx < start_frame:
                 continue
-
             if cancel_event and cancel_event.is_set():
                 raise InterruptedError("Processing cancelled by user")
             if pause_event:
@@ -52,11 +57,24 @@ class MattingPipeline:
                         raise InterruptedError("Processing cancelled by user")
                     time.sleep(0.1)
 
-            alpha = predict(self._model, frame, self._device)
-            cache.save_mask(task_id, idx, alpha)
+            batch_frames.append(frame)
+            batch_indices.append(idx)
 
+            if len(batch_frames) >= batch_size:
+                masks = predict_batch(self._model, batch_frames, self._device, resolution)
+                for bi, mask in zip(batch_indices, masks):
+                    cache.save_mask(task_id, bi, mask)
+                if progress_callback:
+                    progress_callback(batch_indices[-1] + 1, total, "inference")
+                batch_frames.clear()
+                batch_indices.clear()
+
+        if batch_frames:
+            masks = predict_batch(self._model, batch_frames, self._device, resolution)
+            for bi, mask in zip(batch_indices, masks):
+                cache.save_mask(task_id, bi, mask)
             if progress_callback:
-                progress_callback(idx + 1, total, "inference")
+                progress_callback(batch_indices[-1] + 1, total, "inference")
 
     def encode_phase(
         self,
@@ -72,9 +90,11 @@ class MattingPipeline:
         total = video_info["frame_count"]
         width, height, fps = video_info["width"], video_info["height"], video_info["fps"]
 
+        source_bitrate = video_info.get("bitrate_mbps", 0.0)
         writer = create_writer(
             self._config, output_path, width, height, fps,
             audio_source=input_path,
+            source_bitrate_mbps=source_bitrate,
         )
 
         with writer:
