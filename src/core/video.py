@@ -50,25 +50,44 @@ class FrameReader:
 class ProResWriter:
     """Writes RGBA frames to a MOV file using ProRes 4444 via FFmpeg."""
 
-    def __init__(self, output_path: str, width: int, height: int, fps: float):
+    def __init__(
+        self,
+        output_path: str,
+        width: int,
+        height: int,
+        fps: float,
+        audio_source: str | None = None,
+    ):
         self._output_path = output_path
         self._width = width
         self._height = height
+
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-f", "rawvideo",
+            "-pix_fmt", "rgba",
+            "-s", f"{width}x{height}",
+            "-r", str(fps),
+            "-i", "-",
+        ]
+        if audio_source:
+            cmd.extend(["-i", audio_source])
+
+        cmd.extend([
+            "-c:v", "prores_ks",
+            "-profile:v", "4444",
+            "-pix_fmt", "yuva444p10le",
+            "-vendor", "apl0",
+        ])
+
+        if audio_source:
+            cmd.extend(["-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
+
+        cmd.append(output_path)
+
         self._process = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-y",
-                "-f", "rawvideo",
-                "-pix_fmt", "rgba",
-                "-s", f"{width}x{height}",
-                "-r", str(fps),
-                "-i", "-",
-                "-c:v", "prores_ks",
-                "-profile:v", "4444",
-                "-pix_fmt", "yuva444p10le",
-                "-vendor", "apl0",
-                output_path,
-            ],
+            cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
