@@ -1,8 +1,8 @@
 # BiRefNet GUI 开发进度
 
-**更新日期**: 2026-04-04
-**当前版本**: P3 完成 (MVP + 音频/图片/拖拽 + 批量队列 + 高级参数/显存检测/布局重构)
-**分支**: `master`
+**更新日期**: 2026-04-05
+**当前版本**: P4 完成 (MVP + 音频/图片/拖拽 + 批量队列 + 高级参数/显存检测/布局重构 + FP16加速/多模型/模型管理/时序修复)
+**分支**: `feature/p4-fp16-models-temporal`
 
 ---
 
@@ -204,6 +204,67 @@ birefnet-gui/
 
 ---
 
+## 四期完成内容 (P4 FP16 + 多模型 + 模型管理 + 时序修复)
+
+### 已实现功能
+
+| 模块 | DESIGN.md 对应章节 | 完成情况 | 说明 |
+|------|-------------------|---------|------|
+| FP16 自动加速 | 2.1 加速方案 | ✅ 完成 | CUDA 自动开启半精度推理，MPS/CPU 保持 FP32 |
+| 多模型支持 | 4.1 模型选择 | ✅ 完成 | 6 种模型全部支持加载和切换 |
+| 模型注册表 | 4.2 模型管理 | ✅ 完成 | ModelInfo + MODEL_REGISTRY 统一管理元数据 |
+| 模型管理 Tab | 4.2 模型管理 | ✅ 完成 | 模型卡片列表 + 下载/删除 + 进度显示 |
+| 模型下载 | 4.4 模型下载 | ✅ 完成 | hf-mirror 镜像优先，失败回退 HuggingFace 官方 |
+| 首次启动检测 | 4.2 模型管理 | ✅ 完成 | 无模型时自动切到模型管理 Tab |
+| 时序修复 | 3.1.2 时序一致性 | ✅ 完成 | 异常帧检测 + 邻帧替换，消除 mask 闪现 |
+| 三阶段 Pipeline | 3.1.2 时序一致性 | ✅ 完成 | 推理 → 时序修复 → 编码 |
+| .brm 兼容 | 3.1.6 工程文件 | ✅ 完成 | temporal_fix 字段向后兼容 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/core/temporal.py` | 异常帧检测 + 邻帧替换算法 |
+| `src/core/model_downloader.py` | 模型下载器（hf-mirror 优先 + 断点续传） |
+| `src/gui/model_tab.py` | 模型管理 Tab：卡片列表 + 下载/删除 + 进度 |
+| `tests/test_temporal.py` | 时序修复测试 (8个) |
+| `tests/test_model_downloader.py` | 模型下载器测试 (7个) |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/core/config.py` | ModelInfo + MODEL_REGISTRY + temporal_fix 字段 |
+| `src/core/inference.py` | FP16 autocast (CUDA) |
+| `src/core/pipeline.py` | 三阶段流水线（推理 → 时序修复 → 编码） |
+| `src/core/queue_task.py` | ProcessingPhase.TEMPORAL_FIX + temporal_fix 序列化 |
+| `src/gui/settings_panel.py` | 仅显示已安装模型 + 管理模型链接 + 时序修复开关 |
+| `src/gui/main_window.py` | 模型管理 Tab 集成 + 首次启动检测 + 三阶段进度 |
+| `src/gui/queue_tab.py` | 三阶段进度显示 + 时序修复阶段暂停禁用 |
+| `download_models.py` | 使用 MODEL_REGISTRY |
+
+### 测试覆盖
+
+| 测试文件 | 测试数 | 覆盖模块 |
+|----------|--------|---------|
+| test_config.py | 27 | 配置模块（含 ModelInfo/MODEL_REGISTRY/temporal_fix） |
+| test_device_info.py | 8 | GPU/VRAM 检测 |
+| test_inference.py | 14 | 推理模块（含 FP16 autocast） |
+| test_temporal.py | 8 | 时序修复算法 |
+| test_pipeline.py | 12 | 端到端 + 三阶段 + temporal_fix 开关 |
+| test_model_downloader.py | 7 | 模型下载器 |
+| test_video.py | 7 | 视频 I/O |
+| test_writer.py | 17 | Writer |
+| test_queue_task.py | 8 | 队列任务序列化（含 temporal_fix 兼容） |
+| test_cache.py | 10 | MaskCacheManager |
+| test_queue_manager.py | 12 | 队列管理 |
+| test_compositing.py | 12 | 合成模块 |
+| test_audio.py | 7 | 音频处理 |
+| test_image_pipeline.py | 5 | 图片处理 |
+| **合计** | **154** | **全部通过** |
+
+---
+
 ## 未完成功能 (后续开发)
 
 以下按 DESIGN.md 章节逐项列出所有待开发功能，分为建议优先级。
@@ -216,15 +277,14 @@ birefnet-gui/
 | 视频预览 | 增加复杂度，用系统播放器/剪辑软件查看 |
 | 处理范围选择 | 应由专业剪辑软件处理 |
 | 菜单栏 | 目前没有必须放菜单里的功能 |
+| 完成后操作 | 关机/休眠，价值不高 |
 
 ### 建议下一期开发
 
 | 功能 | DESIGN.md 章节 | 说明 |
 |------|---------------|------|
-| 硬件编码加速 | 3.1.3 高级参数 | NVENC/VideoToolbox 硬件编码器，编码阶段提速 |
-| 时序一致性 | 3.1.2 时序一致性 | 帧间平滑处理，减少闪烁 |
-| 缓存管理 | 3.1.6 清理策略 | 临时文件自动/手动清理 |
-| 完成后操作 | 3.1.5 完成后操作 | 关机/休眠 |
+| 硬件编码加速 | 3.1.3 高级参数 | NVENC/VideoToolbox 硬件编码器，编码阶段提速（推理是主要瓶颈，优先级低） |
+| 缓存管理 GUI | 3.1.6 清理策略 | 临时文件查看大小/手动清理按钮（代码层面已有 cleanup 方法） |
 
 ### 后续考虑
 
