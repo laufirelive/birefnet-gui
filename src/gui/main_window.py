@@ -305,7 +305,10 @@ class MainWindow(QMainWindow):
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
             self._select_btn.setEnabled(True)
-            self._queue_tab._set_queue_state(self._queue_tab._queue_state)
+            # Re-enable queue start if queue is idle and has pending tasks
+            if self._queue_tab._queue_state == "idle":
+                has_pending = self._queue_manager.next_pending_task() is not None
+                self._queue_tab._start_btn.setEnabled(has_pending)
 
     def _on_select_video(self):
         path, _ = QFileDialog.getOpenFileName(
