@@ -26,10 +26,14 @@ class MaskCacheManager:
         return mask
 
     def get_cached_count(self, task_id: str) -> int:
+        """Return the number of contiguous cached masks starting from frame 0."""
         masks_dir = os.path.join(self._cache_dir, task_id, "masks")
         if not os.path.isdir(masks_dir):
             return 0
-        return len([f for f in os.listdir(masks_dir) if f.endswith(".png")])
+        idx = 0
+        while os.path.exists(os.path.join(masks_dir, f"{idx:06d}.png")):
+            idx += 1
+        return idx
 
     def save_metadata(self, task_id: str, video_info: dict) -> None:
         task_dir = os.path.join(self._cache_dir, task_id)

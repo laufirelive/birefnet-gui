@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.config import (
     BackgroundMode,
+    FORMAT_EXTENSIONS,
     IMAGE_EXTENSIONS,
     InputType,
     MODELS,
@@ -62,18 +63,6 @@ MODE_LABELS = {
     BackgroundMode.MASK_WB: "白底黑蒙版",
     BackgroundMode.SIDE_BY_SIDE: "原图+蒙版分轨",
 }
-
-# File extension mapping
-FORMAT_EXTENSIONS = {
-    OutputFormat.MOV_PRORES: ".mov",
-    OutputFormat.WEBM_VP9: ".webm",
-    OutputFormat.MP4_H264: ".mp4",
-    OutputFormat.MP4_H265: ".mp4",
-    OutputFormat.MP4_AV1: ".mp4",
-    OutputFormat.PNG_SEQUENCE: "",
-    OutputFormat.TIFF_SEQUENCE: "",
-}
-
 
 class MainWindow(QMainWindow):
     def __init__(self):

@@ -54,6 +54,17 @@ MODELS = {
 }
 
 
+FORMAT_EXTENSIONS = {
+    OutputFormat.MOV_PRORES: ".mov",
+    OutputFormat.WEBM_VP9: ".webm",
+    OutputFormat.MP4_H264: ".mp4",
+    OutputFormat.MP4_H265: ".mp4",
+    OutputFormat.MP4_AV1: ".mp4",
+    OutputFormat.PNG_SEQUENCE: "",
+    OutputFormat.TIFF_SEQUENCE: "",
+}
+
+
 @dataclass
 class ProcessingConfig:
     model_name: str = "BiRefNet-general"

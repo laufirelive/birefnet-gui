@@ -32,6 +32,12 @@ class MattingPipeline:
     ) -> None:
         video_info = get_video_info(input_path)
         total = video_info["frame_count"]
+
+        # Validate cache on resume; invalidate if source file changed
+        if start_frame > 0 and not cache.validate(task_id, video_info):
+            cache.cleanup(task_id)
+            start_frame = 0
+
         cache.save_metadata(task_id, video_info)
 
         for idx, frame in enumerate(FrameReader(input_path)):

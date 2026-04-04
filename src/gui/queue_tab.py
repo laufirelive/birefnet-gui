@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.cache import MaskCacheManager
-from src.core.config import IMAGE_EXTENSIONS, MODELS, VIDEO_EXTENSIONS, InputType, ProcessingConfig
+from src.core.config import FORMAT_EXTENSIONS, IMAGE_EXTENSIONS, MODELS, VIDEO_EXTENSIONS, InputType, ProcessingConfig
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import ProcessingPhase, QueueTask, TaskStatus
 from src.worker.matting_worker import CACHE_DIR, MattingWorker
@@ -42,6 +42,7 @@ class QueueTab(QWidget):
         self._start_time: float | None = None
         self._current_phase: str | None = None
         self._queue_state = "idle"
+        self._last_save_time = 0.0
 
         self.setAcceptDrops(True)
         self._init_ui()
@@ -268,7 +269,6 @@ class QueueTab(QWidget):
         self._current_worker.start()
 
     def _build_output_path(self, task: QueueTask) -> str:
-        from src.gui.main_window import FORMAT_EXTENSIONS
         model_dir = MODELS[task.config.model_name]
         timestamp = int(time.time() * 1000)
 
@@ -309,8 +309,13 @@ class QueueTab(QWidget):
             )
 
         self._update_total_progress()
-        self._refresh_table()
-        self._qm.save()
+
+        # Throttle expensive operations: save + table refresh every 2s or 100 frames
+        now = time.time()
+        if now - self._last_save_time >= 2.0 or current % 100 == 0:
+            self._qm.save()
+            self._refresh_table()
+            self._last_save_time = now
 
     def _update_total_progress(self):
         completed_work = 0
