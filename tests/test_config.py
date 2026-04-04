@@ -1,8 +1,11 @@
 from src.core.config import (
     BackgroundMode,
+    IMAGE_EXTENSIONS,
+    InputType,
     MODELS,
     OutputFormat,
     ProcessingConfig,
+    VIDEO_EXTENSIONS,
 )
 
 
@@ -41,6 +44,25 @@ class TestBackgroundMode:
         assert BackgroundMode.GREEN.needs_alpha is False
         assert BackgroundMode.MASK_BW.needs_alpha is False
         assert BackgroundMode.SIDE_BY_SIDE.needs_alpha is False
+
+
+class TestInputType:
+    def test_video_type_exists(self):
+        assert InputType.VIDEO.value == "video"
+
+    def test_image_type_exists(self):
+        assert InputType.IMAGE.value == "image"
+
+    def test_image_folder_type_exists(self):
+        assert InputType.IMAGE_FOLDER.value == "image_folder"
+
+
+class TestFileExtensions:
+    def test_video_extensions(self):
+        assert VIDEO_EXTENSIONS == {".mp4", ".avi", ".mov", ".mkv"}
+
+    def test_image_extensions(self):
+        assert IMAGE_EXTENSIONS == {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
 
 
 class TestModels:

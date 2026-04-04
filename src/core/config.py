@@ -34,6 +34,16 @@ class BackgroundMode(Enum):
         return self == BackgroundMode.TRANSPARENT
 
 
+class InputType(Enum):
+    VIDEO = "video"
+    IMAGE = "image"
+    IMAGE_FOLDER = "image_folder"
+
+
+VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+
+
 MODELS = {
     "BiRefNet-general": "birefnet-general",
     "BiRefNet-lite": "birefnet-lite",
