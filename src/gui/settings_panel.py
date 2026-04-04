@@ -2,11 +2,13 @@ import os
 
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -110,6 +112,11 @@ class SettingsPanel(QWidget):
         self._model_combo.currentIndexChanged.connect(lambda _: self.settings_changed.emit())
         model_layout.addWidget(self._model_combo)
 
+        self._manage_models_btn = QPushButton("管理模型...")
+        self._manage_models_btn.setFlat(True)
+        self._manage_models_btn.setStyleSheet("color: #0066CC; text-align: left; padding: 0;")
+        model_layout.addWidget(self._manage_models_btn)
+
         self._device_label = QLabel()
         self._device_label.setStyleSheet("color: gray; font-size: 11px;")
         self._update_device_label()
@@ -184,6 +191,11 @@ class SettingsPanel(QWidget):
         self._preset_combo.currentIndexChanged.connect(lambda _: self.settings_changed.emit())
         advanced_layout.addWidget(self._preset_combo)
 
+        self._temporal_fix_checkbox = QCheckBox("时序修复（减少闪烁）")
+        self._temporal_fix_checkbox.setChecked(True)
+        self._temporal_fix_checkbox.stateChanged.connect(lambda _: self.settings_changed.emit())
+        advanced_layout.addWidget(self._temporal_fix_checkbox)
+
         layout.addWidget(self._advanced_group)
 
         # --- VRAM warning ---
@@ -196,14 +208,11 @@ class SettingsPanel(QWidget):
         layout.addStretch()
 
     def _populate_model_combo(self):
+        self._model_combo.clear()
         for display_name, dir_name in MODELS.items():
             model_path = os.path.join(self._models_dir, dir_name)
             if os.path.isdir(model_path):
                 self._model_combo.addItem(display_name, display_name)
-            else:
-                self._model_combo.addItem(f"{display_name} (未下载)", display_name)
-                idx = self._model_combo.count() - 1
-                self._model_combo.model().item(idx).setEnabled(False)
 
     def _populate_mode_combo(self):
         self._mode_combo.clear()
@@ -294,7 +303,10 @@ class SettingsPanel(QWidget):
         self._preset_label.setVisible(show_preset)
         self._preset_combo.setVisible(show_preset)
 
-        self._advanced_group.setVisible(show_bitrate or show_preset)
+        is_video = self._input_type == InputType.VIDEO or self._input_type is None
+        self._temporal_fix_checkbox.setVisible(is_video)
+
+        self._advanced_group.setVisible(show_bitrate or show_preset or is_video)
 
         show_batch = self._input_type != InputType.IMAGE
         self._batch_combo.setVisible(show_batch)
@@ -340,4 +352,16 @@ class SettingsPanel(QWidget):
             encoding_preset=self._preset_combo.currentData() or EncodingPreset.MEDIUM,
             batch_size=self._batch_combo.currentData() or 1,
             inference_resolution=self._resolution_combo.currentData() or InferenceResolution.RES_1024,
+            temporal_fix=self._temporal_fix_checkbox.isChecked(),
         )
+
+    def refresh_models(self):
+        """Refresh model combo after download/delete."""
+        current = self._model_combo.currentData()
+        self._populate_model_combo()
+        for i in range(self._model_combo.count()):
+            if self._model_combo.itemData(i) == current:
+                self._model_combo.setCurrentIndex(i)
+                return
+        if self._model_combo.count() > 0:
+            self._model_combo.setCurrentIndex(0)
