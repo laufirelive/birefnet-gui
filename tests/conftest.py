@@ -28,6 +28,5 @@ def temp_output_dir():
     """Provide a temporary directory for output files."""
     tmpdir = tempfile.mkdtemp()
     yield tmpdir
-    for f in os.listdir(tmpdir):
-        os.remove(os.path.join(tmpdir, f))
-    os.rmdir(tmpdir)
+    import shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)

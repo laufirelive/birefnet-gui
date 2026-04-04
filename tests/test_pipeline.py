@@ -4,44 +4,89 @@ import threading
 import numpy as np
 import pytest
 
+from src.core.config import BackgroundMode, OutputFormat, ProcessingConfig
 from src.core.video import get_video_info
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "birefnet-general")
-MODEL_EXISTS = os.path.isdir(MODEL_PATH)
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+MODEL_EXISTS = os.path.isdir(os.path.join(MODELS_DIR, "birefnet-general"))
 
 
 @pytest.mark.skipif(not MODEL_EXISTS, reason="Model not downloaded")
 class TestMattingPipeline:
-    def test_processes_video_end_to_end(self, test_video_path, temp_output_dir):
+    def test_processes_video_prores_transparent(self, test_video_path, temp_output_dir):
         from src.core.pipeline import MattingPipeline
 
+        config = ProcessingConfig()  # defaults: general, prores, transparent
         output_path = os.path.join(temp_output_dir, "output.mov")
         progress_log = []
 
-        def on_progress(current, total):
-            progress_log.append((current, total))
-
-        pipeline = MattingPipeline(MODEL_PATH)
+        pipeline = MattingPipeline(config, MODELS_DIR)
         pipeline.process(
             input_path=test_video_path,
             output_path=output_path,
-            progress_callback=on_progress,
+            progress_callback=lambda c, t: progress_log.append((c, t)),
         )
 
-        # Output file exists and is valid
+        assert os.path.exists(output_path)
+        info = get_video_info(output_path)
+        assert info["frame_count"] == 10
+        assert info["width"] == 64
+        assert info["height"] == 64
+        assert len(progress_log) == 10
+        assert progress_log[-1] == (10, 10)
+
+    def test_processes_video_h264_green(self, test_video_path, temp_output_dir):
+        from src.core.pipeline import MattingPipeline
+
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+        )
+        output_path = os.path.join(temp_output_dir, "output.mp4")
+
+        pipeline = MattingPipeline(config, MODELS_DIR)
+        pipeline.process(input_path=test_video_path, output_path=output_path)
+
         assert os.path.exists(output_path)
         info = get_video_info(output_path)
         assert info["frame_count"] == 10
         assert info["width"] == 64
         assert info["height"] == 64
 
-        # Progress was reported for each frame
-        assert len(progress_log) == 10
-        assert progress_log[-1] == (10, 10)
+    def test_processes_video_mask_bw(self, test_video_path, temp_output_dir):
+        from src.core.pipeline import MattingPipeline
+
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.MASK_BW,
+        )
+        output_path = os.path.join(temp_output_dir, "output.mp4")
+
+        pipeline = MattingPipeline(config, MODELS_DIR)
+        pipeline.process(input_path=test_video_path, output_path=output_path)
+
+        assert os.path.exists(output_path)
+
+    def test_processes_png_sequence(self, test_video_path, temp_output_dir):
+        from src.core.pipeline import MattingPipeline
+
+        config = ProcessingConfig(
+            output_format=OutputFormat.PNG_SEQUENCE,
+            background_mode=BackgroundMode.TRANSPARENT,
+        )
+        output_path = os.path.join(temp_output_dir, "seq_output")
+
+        pipeline = MattingPipeline(config, MODELS_DIR)
+        pipeline.process(input_path=test_video_path, output_path=output_path)
+
+        files = sorted(os.listdir(output_path))
+        assert len(files) == 10
+        assert files[0] == "frame_000001.png"
 
     def test_cancel_stops_processing(self, test_video_path, temp_output_dir):
         from src.core.pipeline import MattingPipeline
 
+        config = ProcessingConfig()
         output_path = os.path.join(temp_output_dir, "output.mov")
         cancel_event = threading.Event()
         frame_count = []
@@ -51,7 +96,7 @@ class TestMattingPipeline:
             if current >= 3:
                 cancel_event.set()
 
-        pipeline = MattingPipeline(MODEL_PATH)
+        pipeline = MattingPipeline(config, MODELS_DIR)
         with pytest.raises(InterruptedError):
             pipeline.process(
                 input_path=test_video_path,
@@ -60,5 +105,4 @@ class TestMattingPipeline:
                 cancel_event=cancel_event,
             )
 
-        # Should have stopped around frame 3-4 (not all 10)
         assert len(frame_count) < 10

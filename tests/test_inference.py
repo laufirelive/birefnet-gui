@@ -6,7 +6,7 @@ import pytest
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "birefnet-general")
 MODEL_EXISTS = os.path.isdir(MODEL_PATH)
 
-from src.core.inference import detect_device, load_model, predict
+from src.core.inference import detect_device, get_model_path, load_model, predict
 
 
 class TestDetectDevice:
@@ -46,3 +46,14 @@ class TestPredict:
         frame = np.random.randint(0, 255, (1080, 1920, 3), dtype=np.uint8)
         alpha = predict(self.model, frame, self.device)
         assert alpha.shape == (1080, 1920)
+
+
+class TestGetModelPath:
+    def test_returns_correct_path(self, tmp_path):
+        models_dir = str(tmp_path)
+        path = get_model_path("BiRefNet-general", models_dir)
+        assert path == os.path.join(str(tmp_path), "birefnet-general")
+
+    def test_unknown_model_raises(self, tmp_path):
+        with pytest.raises(KeyError):
+            get_model_path("NonExistentModel", str(tmp_path))

@@ -6,6 +6,14 @@ from PIL import Image
 from torchvision import transforms
 from transformers import AutoModelForImageSegmentation
 
+from src.core.config import MODELS
+
+
+def get_model_path(model_name: str, models_dir: str) -> str:
+    """Map a model display name to its local directory path."""
+    dir_name = MODELS[model_name]
+    return os.path.join(models_dir, dir_name)
+
 
 def detect_device() -> str:
     """Return the best available device: cuda > mps > cpu."""

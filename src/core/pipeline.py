@@ -3,17 +3,20 @@ import threading
 import time
 from typing import Callable, Optional
 
-import numpy as np
-
-from src.core.inference import detect_device, load_model, predict
-from src.core.video import FrameReader, ProResWriter, get_video_info
+from src.core.compositing import compose_frame
+from src.core.config import ProcessingConfig
+from src.core.inference import detect_device, get_model_path, load_model, predict
+from src.core.video import FrameReader, get_video_info
+from src.core.writer import create_writer
 
 
 class MattingPipeline:
-    """Orchestrates video read -> BiRefNet inference -> ProRes write."""
+    """Orchestrates video read -> BiRefNet inference -> compositing -> write."""
 
-    def __init__(self, model_path: str):
+    def __init__(self, config: ProcessingConfig, models_dir: str):
+        self._config = config
         self._device = detect_device()
+        model_path = get_model_path(config.model_name, models_dir)
         self._model = load_model(model_path, self._device)
 
     def process(
@@ -24,18 +27,14 @@ class MattingPipeline:
         pause_event: Optional[threading.Event] = None,
         cancel_event: Optional[threading.Event] = None,
     ):
-        """Process a video file: extract frames, run inference, write output.
+        """Process a video file with the configured model, format, and background mode.
 
         Args:
             input_path: Path to input video file.
-            output_path: Path for output MOV file.
+            output_path: Path for output file or directory (for image sequences).
             progress_callback: Called with (current_frame, total_frames) after each frame.
             pause_event: When set, processing pauses until cleared.
             cancel_event: When set, processing stops and raises InterruptedError.
-
-        Raises:
-            FileNotFoundError: If input file doesn't exist.
-            InterruptedError: If cancel_event is set during processing.
         """
         video_info = get_video_info(input_path)
         total_frames = video_info["frame_count"]
@@ -43,13 +42,12 @@ class MattingPipeline:
         height = video_info["height"]
         fps = video_info["fps"]
 
-        reader = FrameReader(input_path)
+        writer = create_writer(self._config, output_path, width, height, fps)
 
-        with ProResWriter(output_path, width, height, fps) as writer:
-            for frame_idx, frame in enumerate(reader, start=1):
+        with writer:
+            for frame_idx, frame in enumerate(FrameReader(input_path), start=1):
                 # Check cancel
                 if cancel_event and cancel_event.is_set():
-                    # Clean up partial output after context manager closes
                     break
 
                 # Check pause
@@ -58,23 +56,22 @@ class MattingPipeline:
                         if cancel_event and cancel_event.is_set():
                             break
                         time.sleep(0.1)
-                    # Re-check cancel after waking from pause
                     if cancel_event and cancel_event.is_set():
                         break
 
                 # Inference
                 alpha = predict(self._model, frame, self._device)
 
-                # Compose RGBA (BGR -> RGB + alpha)
-                rgba = np.dstack([frame[:, :, ::-1], alpha])
-                writer.write_frame(rgba)
+                # Compose output frame
+                composed = compose_frame(frame, alpha, self._config.background_mode)
+                writer.write_frame(composed)
 
                 # Report progress
                 if progress_callback:
                     progress_callback(frame_idx, total_frames)
 
-        # After writer is closed, handle cancel cleanup
+        # Handle cancel cleanup
         if cancel_event and cancel_event.is_set():
-            if os.path.exists(output_path):
+            if os.path.exists(output_path) and os.path.isfile(output_path):
                 os.remove(output_path)
             raise InterruptedError("Processing cancelled by user")

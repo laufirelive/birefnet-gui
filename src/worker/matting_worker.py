@@ -3,6 +3,7 @@ import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from src.core.config import ProcessingConfig
 from src.core.pipeline import MattingPipeline
 
 
@@ -21,19 +22,20 @@ class MattingWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, model_path: str, input_path: str, output_path: str):
+    def __init__(self, config: ProcessingConfig, models_dir: str, input_path: str, output_path: str):
         super().__init__()
-        self._model_path = model_path
+        self._config = config
+        self._models_dir = models_dir
         self._input_path = input_path
         self._output_path = output_path
 
-        self._pause_event = threading.Event()  # set = paused
-        self._cancel_event = threading.Event()  # set = cancelled
+        self._pause_event = threading.Event()
+        self._cancel_event = threading.Event()
         self._last_time = None
 
     def run(self):
         try:
-            pipeline = MattingPipeline(self._model_path)
+            pipeline = MattingPipeline(self._config, self._models_dir)
             self._last_time = time.time()
             pipeline.process(
                 input_path=self._input_path,
