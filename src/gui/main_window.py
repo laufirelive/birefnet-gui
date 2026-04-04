@@ -455,15 +455,16 @@ class MainWindow(QMainWindow):
                 return os.path.join(self._output_dir, filename)
             else:
                 return os.path.join(os.path.dirname(self._input_path), filename)
+        elif self._input_type == InputType.IMAGE_FOLDER:
+            folder_name = os.path.basename(self._input_path.rstrip(os.sep))
+            subdir = f"{folder_name}_{model_dir_name}_{timestamp}"
+            base_dir = self._output_dir or os.path.dirname(self._input_path)
+            return os.path.join(base_dir, subdir)
         else:
-            # For image input, return the output directory
+            # Single image — output to directory
             if self._output_dir:
                 return self._output_dir
-            else:
-                if os.path.isdir(self._input_path):
-                    return os.path.dirname(self._input_path)
-                else:
-                    return os.path.dirname(self._input_path)
+            return os.path.dirname(self._input_path)
 
     def _on_start(self):
         if not self._input_path:

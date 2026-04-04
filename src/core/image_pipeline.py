@@ -95,11 +95,8 @@ class ImagePipeline:
         if not image_files:
             raise ValueError(f"No image files found in: {folder_path}")
 
-        folder_name = os.path.basename(folder_path)
-        model_dir_name = MODELS[self._config.model_name]
-        timestamp = int(time.time() * 1000)
-        out_subdir = f"{folder_name}_{model_dir_name}_{timestamp}"
-        out_path = os.path.join(output_dir, out_subdir)
+        # output_dir is the final output directory (caller determines the name)
+        out_path = output_dir
         os.makedirs(out_path, exist_ok=True)
 
         total = len(image_files)

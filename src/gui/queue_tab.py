@@ -307,6 +307,11 @@ class QueueTab(QWidget):
             filename = f"{base_name}_{model_dir}_{timestamp}{ext}"
             out_dir = task.output_dir or os.path.dirname(task.input_path)
             return os.path.join(out_dir, filename)
+        elif task.input_type == InputType.IMAGE_FOLDER:
+            folder_name = os.path.basename(task.input_path.rstrip(os.sep))
+            subdir = f"{folder_name}_{model_dir}_{timestamp}"
+            out_dir = task.output_dir or os.path.dirname(task.input_path)
+            return os.path.join(out_dir, subdir)
         else:
             return task.output_dir or os.path.dirname(task.input_path)
 
