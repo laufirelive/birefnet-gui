@@ -7,6 +7,7 @@ from src.core.cache import MaskCacheManager
 from src.core.compositing import compose_frame
 from src.core.config import ProcessingConfig
 from src.core.inference import detect_device, get_model_path, load_model, predict, predict_batch
+from src.core.temporal import detect_and_fix_outliers
 from src.core.video import FrameReader, get_video_info
 from src.core.writer import create_writer
 
@@ -76,6 +77,26 @@ class MattingPipeline:
             if progress_callback:
                 progress_callback(batch_indices[-1] + 1, total, "inference")
 
+    def temporal_fix_phase(
+        self,
+        task_id: str,
+        cache: MaskCacheManager,
+        total_frames: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> int:
+        """Run temporal outlier detection and fix. Returns number of fixed frames."""
+        def inner_callback(current: int, total: int):
+            if cancel_event and cancel_event.is_set():
+                raise InterruptedError("Processing cancelled by user")
+            if progress_callback:
+                progress_callback(current, total, "temporal_fix")
+
+        return detect_and_fix_outliers(
+            cache, task_id, total_frames,
+            progress_callback=inner_callback,
+        )
+
     def encode_phase(
         self,
         input_path: str,
@@ -132,11 +153,18 @@ class MattingPipeline:
         pause_event: Optional[threading.Event] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> None:
-        """Convenience method: run infer_phase then encode_phase."""
+        """Convenience method: run infer_phase, optional temporal_fix_phase, then encode_phase."""
         self.infer_phase(
             input_path, task_id, cache, start_frame,
             progress_callback, pause_event, cancel_event,
         )
+        if self._config.temporal_fix:
+            video_info = get_video_info(input_path)
+            total_frames = video_info["frame_count"]
+            self.temporal_fix_phase(
+                task_id, cache, total_frames,
+                progress_callback, cancel_event,
+            )
         self.encode_phase(
             input_path, output_path, task_id, cache,
             progress_callback, pause_event, cancel_event,

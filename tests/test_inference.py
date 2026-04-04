@@ -102,3 +102,52 @@ class TestGetModelPath:
     def test_unknown_model_raises(self, tmp_path):
         with pytest.raises(KeyError):
             get_model_path("NonExistentModel", str(tmp_path))
+
+
+class TestFP16Autocast:
+    def test_predict_calls_autocast_for_cuda(self):
+        """Verify autocast is used when device is cuda."""
+        from unittest.mock import patch, MagicMock
+        import src.core.inference as inf
+        import torch
+        frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        fake_pred = torch.zeros(1, 1, 64, 64)
+        mock_model = MagicMock()
+        mock_model.return_value = [fake_pred]
+        # Mock tensor .to() so we don't actually move to a CUDA device
+        fake_tensor = torch.zeros(1, 3, 64, 64)
+        with patch.object(inf.torch, "autocast") as mock_autocast, \
+             patch.object(inf, "_get_transform") as mock_transform:
+            mock_ctx = MagicMock()
+            mock_autocast.return_value = mock_ctx
+            mock_ctx.__enter__ = MagicMock(return_value=None)
+            mock_ctx.__exit__ = MagicMock(return_value=False)
+            mock_t = MagicMock()
+            mock_t.return_value.unsqueeze.return_value.to.return_value = fake_tensor
+            mock_transform.return_value = mock_t
+            inf.predict(mock_model, frame, "cuda", resolution=64)
+            mock_autocast.assert_called_once_with("cuda", dtype=torch.float16)
+
+    def test_predict_no_autocast_for_cpu(self):
+        from unittest.mock import patch, MagicMock
+        import src.core.inference as inf
+        frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        with patch.object(inf.torch, "autocast") as mock_autocast:
+            import torch
+            fake_pred = torch.zeros(1, 1, 64, 64)
+            mock_model = MagicMock()
+            mock_model.return_value = [fake_pred]
+            inf.predict(mock_model, frame, "cpu", resolution=64)
+            mock_autocast.assert_not_called()
+
+    def test_predict_no_autocast_for_mps(self):
+        from unittest.mock import patch, MagicMock
+        import src.core.inference as inf
+        frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        with patch.object(inf.torch, "autocast") as mock_autocast:
+            import torch
+            fake_pred = torch.zeros(1, 1, 64, 64)
+            mock_model = MagicMock()
+            mock_model.return_value = [fake_pred]
+            inf.predict(mock_model, frame, "mps", resolution=64)
+            mock_autocast.assert_not_called()

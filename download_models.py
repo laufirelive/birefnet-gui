@@ -6,62 +6,43 @@ Run: python download_models.py              # download general (default)
      python download_models.py general lite # download specific models
 """
 
-import os
 import sys
 
-from huggingface_hub import snapshot_download
+from src.core.config import MODEL_REGISTRY
+from src.core.model_downloader import ModelDownloader
 
-MODELS = {
-    "general": ("birefnet-general", "zhengpeng7/BiRefNet"),
-    "lite": ("birefnet-lite", "zhengpeng7/BiRefNet_lite"),
-    "matting": ("birefnet-matting", "zhengpeng7/BiRefNet-matting"),
-    "hr": ("birefnet-hr", "zhengpeng7/BiRefNet_HR"),
-    "hr-matting": ("birefnet-hr-matting", "zhengpeng7/BiRefNet_HR-matting"),
-    "dynamic": ("birefnet-dynamic", "zhengpeng7/BiRefNet_dynamic"),
-}
-
-
-def download_model(key: str, models_dir: str = "./models"):
-    dir_name, repo_id = MODELS[key]
-    local_path = os.path.join(models_dir, dir_name)
-    os.makedirs(local_path, exist_ok=True)
-
-    print(f"\nDownloading {key} from {repo_id}...")
-    print(f"  -> {os.path.abspath(local_path)}")
-
-    snapshot_download(
-        repo_id=repo_id,
-        local_dir=local_path,
-        local_dir_use_symlinks=False,
-        resume_download=True,
-    )
-    print(f"  Done: {key}")
+MODELS_DIR = "./models"
 
 
 def main():
     args = sys.argv[1:]
+    downloader = ModelDownloader(MODELS_DIR)
 
     if not args:
         print("No arguments. Downloading birefnet-general (default).")
-        print("Use --all to download all models, or specify: general lite matting hr hr-matting dynamic")
-        download_model("general")
+        print(f"Use --all to download all models, or specify: {', '.join(MODEL_REGISTRY.keys())}")
+        downloader.download_model("general")
+        print("Done.")
         return
 
     if "--all" in args:
-        keys = list(MODELS.keys())
+        keys = list(MODEL_REGISTRY.keys())
     else:
         keys = []
         for arg in args:
-            if arg not in MODELS:
+            if arg not in MODEL_REGISTRY:
                 print(f"Unknown model: {arg}")
-                print(f"Available: {', '.join(MODELS.keys())}")
+                print(f"Available: {', '.join(MODEL_REGISTRY.keys())}")
                 sys.exit(1)
             keys.append(arg)
 
     for key in keys:
-        download_model(key)
+        info = MODEL_REGISTRY[key]
+        print(f"\nDownloading {key} ({info.display_name})...")
+        downloader.download_model(key)
+        print(f"  Done: {key}")
 
-    print(f"\nAll done. Models saved to {os.path.abspath('./models')}")
+    print("\nAll done.")
 
 
 if __name__ == "__main__":
