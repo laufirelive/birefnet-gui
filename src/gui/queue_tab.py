@@ -261,8 +261,13 @@ class QueueTab(QWidget):
         if task.input_type == InputType.VIDEO:
             start_frame = self._cache.get_cached_count(task.id)
 
-        # Reuse stored output_path for resume, build new one for fresh tasks
-        output_path = task.output_path or self._build_output_path(task)
+        # Reuse stored output_path for resume (image folders).
+        # For video: if interrupted during encoding, the partial file is corrupt,
+        # so always build a fresh output path for video tasks.
+        if task.input_type == InputType.VIDEO:
+            output_path = self._build_output_path(task)
+        else:
+            output_path = task.output_path or self._build_output_path(task)
         task.output_path = output_path
         models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models"))
 
@@ -317,6 +322,9 @@ class QueueTab(QWidget):
         if phase != self._current_phase:
             self._current_phase = phase
             self._start_time = time.time()
+            # Disable pause during encoding — can't resume a partial video file
+            is_encoding = phase == "encoding"
+            self._pause_btn.setEnabled(not is_encoding and self._queue_state == "running")
 
         percent = int(current / total * 100) if total > 0 else 0
         self._progress_bar.setValue(percent)
