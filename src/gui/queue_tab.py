@@ -121,6 +121,10 @@ class QueueTab(QWidget):
         self._pause_btn.setText("继续" if state == "paused" else "暂停")
         self._cancel_btn.setEnabled(not is_idle)
         self._clear_btn.setEnabled(is_idle)
+        # Show "继续队列" when idle with paused tasks (e.g. after app restart)
+        if is_idle and has_pending:
+            has_paused = any(t.status == TaskStatus.PAUSED for t in self._qm.tasks)
+            self._start_btn.setText("继续队列" if has_paused else "开始队列")
         self.queue_running_changed.emit(not is_idle)
 
     def _refresh_table(self):
