@@ -1,6 +1,9 @@
 from src.core.config import (
     BackgroundMode,
+    BitrateMode,
+    EncodingPreset,
     IMAGE_EXTENSIONS,
+    InferenceResolution,
     InputType,
     MODELS,
     OutputFormat,
@@ -74,6 +77,65 @@ class TestModels:
         assert MODELS["BiRefNet-general"] == "birefnet-general"
         assert "BiRefNet-lite" in MODELS
         assert "BiRefNet-HR" in MODELS
+
+
+class TestBitrateMode:
+    def test_all_modes_exist(self):
+        expected = {"auto", "low", "medium", "high", "very_high", "custom"}
+        assert {m.value for m in BitrateMode} == expected
+
+    def test_multiplier(self):
+        assert BitrateMode.LOW.multiplier == 0.25
+        assert BitrateMode.MEDIUM.multiplier == 0.5
+        assert BitrateMode.HIGH.multiplier == 1.0
+        assert BitrateMode.VERY_HIGH.multiplier == 2.0
+        assert BitrateMode.AUTO.multiplier == 1.0
+        assert BitrateMode.CUSTOM.multiplier is None
+
+
+class TestEncodingPreset:
+    def test_all_presets_exist(self):
+        expected = {
+            "ultrafast", "superfast", "veryfast", "faster", "fast",
+            "medium", "slow", "slower", "veryslow",
+        }
+        assert {p.value for p in EncodingPreset} == expected
+
+    def test_av1_cpu_used(self):
+        assert EncodingPreset.ULTRAFAST.av1_cpu_used == 8
+        assert EncodingPreset.MEDIUM.av1_cpu_used == 3
+        assert EncodingPreset.VERYSLOW.av1_cpu_used == 0
+
+
+class TestInferenceResolution:
+    def test_all_resolutions_exist(self):
+        assert InferenceResolution.RES_512.value == 512
+        assert InferenceResolution.RES_1024.value == 1024
+        assert InferenceResolution.RES_2048.value == 2048
+
+
+class TestProcessingConfigExtended:
+    def test_new_defaults(self):
+        config = ProcessingConfig()
+        assert config.bitrate_mode == BitrateMode.AUTO
+        assert config.custom_bitrate_mbps == 20.0
+        assert config.encoding_preset == EncodingPreset.MEDIUM
+        assert config.batch_size == 1
+        assert config.inference_resolution == InferenceResolution.RES_1024
+
+    def test_custom_new_fields(self):
+        config = ProcessingConfig(
+            bitrate_mode=BitrateMode.CUSTOM,
+            custom_bitrate_mbps=50.0,
+            encoding_preset=EncodingPreset.SLOW,
+            batch_size=4,
+            inference_resolution=InferenceResolution.RES_2048,
+        )
+        assert config.bitrate_mode == BitrateMode.CUSTOM
+        assert config.custom_bitrate_mbps == 50.0
+        assert config.encoding_preset == EncodingPreset.SLOW
+        assert config.batch_size == 4
+        assert config.inference_resolution == InferenceResolution.RES_2048
 
 
 class TestProcessingConfig:
