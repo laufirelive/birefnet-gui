@@ -1,7 +1,7 @@
 # BiRefNet GUI 开发进度
 
 **更新日期**: 2026-04-04
-**当前版本**: P2 完成 (MVP + 音频/图片/拖拽 + 批量队列)
+**当前版本**: P3 完成 (MVP + 音频/图片/拖拽 + 批量队列 + 高级参数/显存检测/布局重构)
 **分支**: `master`
 
 ---
@@ -39,26 +39,24 @@ birefnet-gui/
 ├── download_models.py           # 模型下载脚本（开发用）
 ├── src/
 │   ├── core/
-│   │   ├── inference.py         # 模型加载 + 单帧推理
-│   │   ├── video.py             # FrameReader + ProResWriter + get_video_info
-│   │   ├── pipeline.py          # 两阶段处理流水线（推理→编码）
+│   │   ├── config.py            # 枚举 + ProcessingConfig 数据类
+│   │   ├── inference.py         # 模型加载 + 单帧/批量推理 + 可变分辨率
+│   │   ├── video.py             # FrameReader + ProResWriter + get_video_info(含码率)
+│   │   ├── writer.py            # FFmpegWriter + ImageSequenceWriter + create_writer 工厂
+│   │   ├── compositing.py       # 背景合成（透明/绿幕/蒙版等）
+│   │   ├── pipeline.py          # 两阶段处理流水线（batch推理→编码）
+│   │   ├── image_pipeline.py    # 图片/图片文件夹处理流水线
 │   │   ├── cache.py             # MaskCacheManager: mask 缓存管理
+│   │   ├── device_info.py       # GPU/显存检测 + VRAM 预估
 │   │   ├── queue_task.py        # QueueTask 数据模型 + 枚举
 │   │   └── queue_manager.py     # QueueManager: 队列管理 + .brm 持久化
 │   ├── worker/
 │   │   └── matting_worker.py    # QThread 工作线程（支持两阶段+续传）
 │   └── gui/
-│       ├── main_window.py       # PyQt6 主窗口（Tab 布局）
+│       ├── main_window.py       # PyQt6 主窗口（Tab 布局 + 底部操作栏）
+│       ├── settings_panel.py    # 右侧设置面板（模型/输出/高级参数/显存警告）
 │       └── queue_tab.py         # 批量队列 Tab
-├── tests/
-│   ├── conftest.py              # 测试 fixtures
-│   ├── test_video.py            # 视频 I/O 测试 (6个)
-│   ├── test_inference.py        # 推理测试 (5个)
-│   ├── test_pipeline.py         # 两阶段流水线测试 (9个)
-│   ├── test_writer.py           # 输出格式测试 (12个)
-│   ├── test_queue_task.py       # QueueTask 测试 (4个)
-│   ├── test_cache.py            # MaskCacheManager 测试 (10个)
-│   └── test_queue_manager.py    # QueueManager 测试 (12个)
+├── tests/                       # 125 个测试
 ├── models/birefnet-general/     # 模型文件（git-ignored）
 ├── DESIGN.md                    # 完整设计文档
 └── docs/superpowers/
@@ -147,51 +145,96 @@ birefnet-gui/
 
 ---
 
+## 三期完成内容 (P3 高级参数 + 显存检测 + 布局重构)
+
+### 已实现功能
+
+| 模块 | DESIGN.md 对应章节 | 完成情况 | 说明 |
+|------|-------------------|---------|------|
+| 码率控制 | 3.1.3 高级参数 | ✅ 完成 | 自动/低/中/高/极高/自定义(Mbps)，基于原视频码率动态计算 |
+| ProRes Profile | 3.1.3 高级参数 | ✅ 完成 | Proxy/LT/Standard/HQ 级别选择 |
+| 编码预设 | 3.1.3 高级参数 | ✅ 完成 | ultrafast~veryslow，H.264/H.265/AV1 适用 |
+| Batch 推理 | 3.1.3 高级参数 | ✅ 完成 | 可配置 batch size (1/2/4/8/16)，根据显存自动推荐 |
+| 推理分辨率 | 3.1.2 分辨率自适应 | ✅ 完成 | 512/1024/2048 可选，支持 BiRefNet 2048 高质量模式 |
+| 显存检测 | 3.1.2 显存检测 | ✅ 完成 | CUDA/MPS/CPU 自动检测，显示设备名称和显存信息 |
+| OOM 预警 | 3.1.2 显存检测 | ✅ 完成 | 预估显存占用，超过可用 90% 时显示黄色警告 |
+| 布局重构 | 3.2 界面设计 | ✅ 完成 | 单任务 Tab: 左右分栏 + 底部固定操作栏 |
+| SettingsPanel | 3.2 界面设计 | ✅ 完成 | 独立右侧设置面板：模型/输出/高级参数/显存警告 |
+| 格式联动 | 3.2 界面设计 | ✅ 完成 | 图片模式隐藏码率/预设；PNG/TIFF 隐藏高级参数；格式切换更新可选项 |
+| .brm 兼容 | 3.1.6 工程文件 | ✅ 完成 | 新字段向后兼容，旧 .brm 文件加载使用默认值 |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/core/device_info.py` | DeviceInfo 数据类 + GPU/显存检测 + VRAM 预估 |
+| `src/gui/settings_panel.py` | 右侧设置面板：模型/输出/高级参数/显存警告 |
+| `tests/test_device_info.py` | 设备检测测试 (8个) |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/core/config.py` | 新增 BitrateMode/EncodingPreset/InferenceResolution 枚举；扩展 ProcessingConfig |
+| `src/core/inference.py` | predict() 支持 resolution 参数；新增 predict_batch() 批量推理 |
+| `src/core/video.py` | get_video_info() 返回 bitrate_mbps；ProResWriter 支持 profile 参数 |
+| `src/core/writer.py` | FFmpegWriter 支持 bitrate_kbps/preset；create_writer 解析高级参数 |
+| `src/core/pipeline.py` | infer_phase 使用 batch 推理；encode_phase 传递 source_bitrate |
+| `src/core/queue_task.py` | 序列化/反序列化新 config 字段，向后兼容 |
+| `src/core/image_pipeline.py` | 使用 inference_resolution 参数 |
+| `src/gui/main_window.py` | 布局重构：左右分栏 + 底部操作栏 + SettingsPanel 集成 |
+
+### 测试覆盖
+
+| 测试文件 | 测试数 | 覆盖模块 |
+|----------|--------|---------|
+| test_config.py | 20 | 配置模块（含新枚举） |
+| test_device_info.py | 8 | GPU/VRAM 检测 |
+| test_inference.py | 11 | 推理模块（含 batch + resolution） |
+| test_pipeline.py | 10 | 端到端 + 两阶段 + batch |
+| test_video.py | 7 | 视频 I/O（含 bitrate） |
+| test_writer.py | 17 | Writer（含 bitrate/preset/profile） |
+| test_queue_task.py | 6 | 队列任务序列化（含向后兼容） |
+| test_cache.py | 10 | MaskCacheManager |
+| test_queue_manager.py | 12 | 队列管理 |
+| test_compositing.py | 12 | 合成模块 |
+| test_audio.py | 7 | 音频处理 |
+| test_image_pipeline.py | 5 | 图片处理 |
+| **合计** | **125** | **全部通过** |
+
+---
+
 ## 未完成功能 (后续开发)
 
 以下按 DESIGN.md 章节逐项列出所有待开发功能，分为建议优先级。
 
-### P1: 建议下一期开发
+### 已砍掉的功能
 
-这些功能是用户体验的关键补充，实现难度适中。
+| 功能 | 原因 |
+|------|------|
+| 设置持久化 | 价值不高，以后设置项多了再考虑 |
+| 视频预览 | 增加复杂度，用系统播放器/剪辑软件查看 |
+| 处理范围选择 | 应由专业剪辑软件处理 |
+| 菜单栏 | 目前没有必须放菜单里的功能 |
 
-| 功能 | DESIGN.md 章节 | 说明 |
-|------|---------------|------|
-| 音频保留 | 3.1.2 音频保留 | FFmpeg 提取原音轨合并到输出 |
-| 图片输入 | 3.1.4 图像处理选项 | 单张图片、图片文件夹批量处理 |
-| 拖拽支持 | 3.1.1 拖拽支持 | 文件拖拽到界面自动识别 |
-| 设置持久化 | Phase 2 | 用户配置保存到 config.json |
-
-### P2: 建议第三期开发
-
-这些功能提升处理效率和专业度。
+### 建议下一期开发
 
 | 功能 | DESIGN.md 章节 | 说明 |
 |------|---------------|------|
-| ~~批量队列~~ | ~~3.1.5 批量队列功能~~ | ~~已完成 (P2)~~ |
-| 视频预览 | 3.1.2 / 3.2 界面设计 | 原图视频播放器（播放/暂停/seek） |
-| 处理范围选择 | 3.1.2 处理范围选择 | 全部/指定时间段/标记帧 |
-| 高级输出参数 | 3.1.3 高级参数 | 码率、CRF、预设、色彩空间、帧率、分辨率 |
-| 显存检测与提示 | 3.1.2 显存检测 | 自动检测显卡，提示模型兼容性 |
-| 分辨率自适应 | 3.1.2 分辨率自适应 | 根据显存自动选择处理分辨率 |
-| 批处理大小 | 3.1.3 高级参数 | 多帧并行推理，根据显存自动推荐 |
-| 菜单栏 | 3.2 界面设计 | [文件][视图][工具][设置][帮助] |
-
-### P3: 建议第四期开发
-
-这些功能面向生产环境的稳定性和完整性。
-
-| 功能 | DESIGN.md 章节 | 说明 |
-|------|---------------|------|
-| 工程文件 (.brm) | 3.1.6 工程文件与断点续传 | 保存/加载进度，断点续传 |
+| 硬件编码加速 | 3.1.3 高级参数 | NVENC/VideoToolbox 硬件编码器，编码阶段提速 |
 | 时序一致性 | 3.1.2 时序一致性 | 帧间平滑处理，减少闪烁 |
+| 缓存管理 | 3.1.6 清理策略 | 临时文件自动/手动清理 |
+| 完成后操作 | 3.1.5 完成后操作 | 关机/休眠 |
+
+### 后续考虑
+
+| 功能 | DESIGN.md 章节 | 说明 |
+|------|---------------|------|
 | ROI 区域选择 | 3.1.2 ROI | 只处理感兴趣区域 |
 | 摄像头实时输入 | 3.1.1 摄像头实时输入 | 实时抠图预览 |
-| 完成后操作 | 3.1.5 完成后操作 | 关机/休眠/播放提示音 |
 | 系统托盘 | 3.2 PyQt6 特性 | 最小化到后台继续处理 |
-| 缓存管理 | 3.1.6 清理策略 | 临时文件自动/手动清理 |
 
-### P4: 部署发布
+### 部署发布
 
 | 功能 | DESIGN.md 章节 | 说明 |
 |------|---------------|------|
