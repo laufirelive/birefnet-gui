@@ -27,6 +27,8 @@ def load_model(model_path: str, device: str) -> AutoModelForImageSegmentation:
         local_files_only=True,
     )
     model.to(device)
+    # Ensure float32 to avoid MPS float16/float32 mismatch
+    model.float()
     model.eval()
     return model
 
