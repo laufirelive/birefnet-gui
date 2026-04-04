@@ -17,7 +17,7 @@ jobs:
         include:
           - os: windows-latest
             artifact: BiRefNet-GUI-Windows
-            torch-extra: --index-url https://download.pytorch.org/whl/cpu
+            torch-extra: --index-url https://download.pytorch.org/whl/cu121
           - os: macos-latest
             artifact: BiRefNet-GUI-macOS-ARM
             torch-extra: ""
@@ -50,11 +50,6 @@ jobs:
         shell: bash
         run: mkdir -p dist/BiRefNet-GUI/models
 
-      - name: Copy GPU enable script (Windows only)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: cp enable_gpu.bat dist/BiRefNet-GUI/
-
       - name: Create README.txt
         shell: bash
         run: |
@@ -73,12 +68,13 @@ jobs:
           模型文件保存在 models/ 目录中。
           ENDOFREADME
 
-      - name: Package as zip
+      - name: Package as zip (split if >1.9GB)
         shell: bash
         run: |
           cd dist
           if [ "$RUNNER_OS" == "Windows" ]; then
-            7z a -tzip "../${{ matrix.artifact }}.zip" BiRefNet-GUI/
+            # Use 7z split volumes: each part <1.9GB to stay under GitHub 2GB limit
+            7z a -tzip -v1900m "../${{ matrix.artifact }}.zip" BiRefNet-GUI/
           else
             zip -r "../${{ matrix.artifact }}.zip" BiRefNet-GUI/
           fi
@@ -87,10 +83,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.zip
+          path: ${{ matrix.artifact }}.zip*
 
       - name: Upload to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.artifact }}.zip
+          files: ${{ matrix.artifact }}.zip*
