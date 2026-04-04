@@ -1,6 +1,8 @@
 import os
 import time
 
+from src.core.paths import get_models_dir
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
@@ -274,7 +276,7 @@ class QueueTab(QWidget):
         else:
             output_path = task.output_path or self._build_output_path(task)
         task.output_path = output_path
-        models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models"))
+        models_dir = get_models_dir()
 
         self._current_worker = MattingWorker(
             config=task.config,

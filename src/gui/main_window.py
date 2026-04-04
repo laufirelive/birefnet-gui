@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.core.paths import get_models_dir
 from src.core.config import (
     FORMAT_EXTENSIONS,
     IMAGE_EXTENSIONS,
@@ -34,8 +35,8 @@ from src.gui.queue_tab import QueueTab
 from src.gui.settings_panel import SettingsPanel
 from src.worker.matting_worker import MattingWorker
 
-# Path to bundled models directory (relative to project root)
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models")
+# Path to bundled models directory
+MODELS_DIR = get_models_dir()
 
 # Path to queue persistence file
 BRM_PATH = os.path.join(os.path.expanduser("~"), ".birefnet-gui", "queue.brm")
