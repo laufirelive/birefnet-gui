@@ -3,8 +3,7 @@ import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from src.core.config import ProcessingConfig
-from src.core.pipeline import MattingPipeline
+from src.core.config import InputType, ProcessingConfig
 
 
 class MattingWorker(QThread):
@@ -22,12 +21,20 @@ class MattingWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, config: ProcessingConfig, models_dir: str, input_path: str, output_path: str):
+    def __init__(
+        self,
+        config: ProcessingConfig,
+        models_dir: str,
+        input_path: str,
+        output_path: str,
+        input_type: InputType = InputType.VIDEO,
+    ):
         super().__init__()
         self._config = config
         self._models_dir = models_dir
         self._input_path = input_path
         self._output_path = output_path
+        self._input_type = input_type
 
         self._pause_event = threading.Event()
         self._cancel_event = threading.Event()
@@ -35,20 +42,43 @@ class MattingWorker(QThread):
 
     def run(self):
         try:
-            pipeline = MattingPipeline(self._config, self._models_dir)
             self._last_time = time.time()
-            pipeline.process(
-                input_path=self._input_path,
-                output_path=self._output_path,
-                progress_callback=self._on_progress,
-                pause_event=self._pause_event,
-                cancel_event=self._cancel_event,
-            )
+
+            if self._input_type == InputType.VIDEO:
+                self._run_video()
+            else:
+                self._run_image()
+
             self.finished.emit(self._output_path)
         except InterruptedError:
             self.error.emit("Processing cancelled")
         except Exception as e:
             self.error.emit(str(e))
+
+    def _run_video(self):
+        from src.core.pipeline import MattingPipeline
+
+        pipeline = MattingPipeline(self._config, self._models_dir)
+        pipeline.process(
+            input_path=self._input_path,
+            output_path=self._output_path,
+            progress_callback=self._on_progress,
+            pause_event=self._pause_event,
+            cancel_event=self._cancel_event,
+        )
+
+    def _run_image(self):
+        from src.core.image_pipeline import ImagePipeline
+
+        pipeline = ImagePipeline(self._config, self._models_dir)
+        result = pipeline.process(
+            input_path=self._input_path,
+            output_dir=self._output_path,
+            progress_callback=self._on_progress,
+            pause_event=self._pause_event,
+            cancel_event=self._cancel_event,
+        )
+        self._output_path = result
 
     def _on_progress(self, current: int, total: int):
         self.progress.emit(current, total)
