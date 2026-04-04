@@ -91,9 +91,14 @@ class ProResWriter:
 
     def close(self):
         """Flush and close the FFmpeg process."""
-        if self._process.stdin:
+        if self._process.stdin and not self._process.stdin.closed:
+            try:
+                self._process.stdin.flush()
+            except BrokenPipeError:
+                pass
             self._process.stdin.close()
-        self._process.wait()
+        # Use communicate() to properly drain stderr and wait for process
+        _, stderr_data = self._process.communicate()
         if self._process.returncode != 0:
-            stderr = self._process.stderr.read().decode()
+            stderr = stderr_data.decode() if stderr_data else "unknown error"
             raise RuntimeError(f"FFmpeg failed (code {self._process.returncode}): {stderr}")
