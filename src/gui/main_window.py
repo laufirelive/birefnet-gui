@@ -599,11 +599,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("已加入队列", 3000)
 
     def _on_queue_running_changed(self, running: bool):
-        """Disable single-task controls when queue is running."""
+        """Disable single-task start when queue is running, but allow file selection + enqueue."""
         if running:
             self._start_btn.setEnabled(False)
-            self._select_btn.setEnabled(False)
-            self._enqueue_btn.setEnabled(False)
+            # Keep select + enqueue enabled so user can add tasks while queue runs
+            has_input = self._input_path is not None
+            self._select_btn.setEnabled(True)
+            self._enqueue_btn.setEnabled(has_input)
         else:
             # Restore based on current state
             self._set_state(self._state)

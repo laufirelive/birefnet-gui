@@ -63,6 +63,8 @@ class QueueTab(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.verticalHeader().setSectionsMovable(True)
+        self._table.verticalHeader().sectionMoved.connect(self._on_row_moved)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self._table)
@@ -128,6 +130,8 @@ class QueueTab(QWidget):
         self.queue_running_changed.emit(not is_idle)
 
     def _refresh_table(self):
+        # Block sectionMoved signal during rebuild to avoid feedback loop
+        self._table.verticalHeader().blockSignals(True)
         self._table.setRowCount(0)
         for task in self._qm.tasks:
             row = self._table.rowCount()
@@ -138,6 +142,7 @@ class QueueTab(QWidget):
             self._table.setItem(row, 1, QTableWidgetItem(model_dir))
             self._table.setItem(row, 2, QTableWidgetItem(task.config.output_format.value))
             self._table.setItem(row, 3, QTableWidgetItem(self._status_text(task)))
+        self._table.verticalHeader().blockSignals(False)
         self.task_count_changed.emit(len(self._qm.tasks))
 
     def _status_text(self, task: QueueTask) -> str:
@@ -180,6 +185,18 @@ class QueueTab(QWidget):
         self._qm.save()
         self._refresh_table()
         self._set_queue_state(self._queue_state)
+
+    def _on_row_moved(self, logical_index: int, old_visual: int, new_visual: int):
+        """Handle vertical header drag reorder."""
+        if old_visual == new_visual:
+            return
+        tasks = self._qm.tasks
+        if logical_index < len(tasks):
+            task = tasks[logical_index]
+            if task.status != TaskStatus.PROCESSING:
+                self._qm.move_task(task.id, new_visual)
+                self._qm.save()
+        self._refresh_table()
 
     def _move_task(self, task_id: str, new_index: int):
         self._qm.move_task(task_id, new_index)
