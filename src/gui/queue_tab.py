@@ -258,7 +258,7 @@ class QueueTab(QWidget):
         self._set_queue_state("running")
 
         start_frame = 0
-        if task.input_type == InputType.VIDEO and task.phase == ProcessingPhase.INFERENCE:
+        if task.input_type == InputType.VIDEO:
             start_frame = self._cache.get_cached_count(task.id)
 
         # Reuse stored output_path for resume, build new one for fresh tasks
