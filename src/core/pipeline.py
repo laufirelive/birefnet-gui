@@ -42,7 +42,10 @@ class MattingPipeline:
         height = video_info["height"]
         fps = video_info["fps"]
 
-        writer = create_writer(self._config, output_path, width, height, fps)
+        writer = create_writer(
+            self._config, output_path, width, height, fps,
+            audio_source=input_path,
+        )
 
         with writer:
             for frame_idx, frame in enumerate(FrameReader(input_path), start=1):
