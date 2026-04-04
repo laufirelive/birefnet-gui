@@ -1,11 +1,15 @@
 import sys
+
 from PyQt6.QtWidgets import QApplication
+
+from src.gui.main_window import MainWindow
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("BiRefNet Video Matting Tool")
-    # MainWindow will be added in Task 6
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
 
 
