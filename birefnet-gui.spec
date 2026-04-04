@@ -22,8 +22,9 @@ hidden = [
 # transformers may lazy-import model classes
 hidden += collect_submodules("transformers.models.bit")
 
-# CUDA libraries not needed for inference — saves ~500-800MB
+# CUDA/PyTorch libs not needed for inference — need to fit GitHub 2GB limit
 cuda_exclude = [
+    # CUDA libs not used by neural network inference
     "cusolver*",
     "cusparse*",
     "npp*",
@@ -32,6 +33,13 @@ cuda_exclude = [
     "curand*",
     "cufft*",
     "nvjitlink*",
+    "cublasLt*",           # ~200MB, cublas alone suffices for inference
+    # cuDNN training-only libs
+    "cudnn_adv*",          # advanced ops (RNN training etc.)
+    "cudnn_cnn_train*",
+    "cudnn_ops_train*",
+    # Triton compiler — not needed for eager-mode inference
+    "triton*",
 ]
 
 a = Analysis(

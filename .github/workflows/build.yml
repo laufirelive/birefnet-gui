@@ -42,6 +42,10 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Remove triton (not needed for inference, saves ~150MB)
+        shell: bash
+        run: pip uninstall -y triton 2>/dev/null || true
+
       - name: Build with PyInstaller
         run: |
           pyinstaller birefnet-gui.spec
