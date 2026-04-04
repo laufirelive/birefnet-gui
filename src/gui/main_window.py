@@ -301,6 +301,7 @@ class MainWindow(QMainWindow):
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._queue_tab._start_btn.setEnabled(False)
         elif state == "paused":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(True)
@@ -308,12 +309,14 @@ class MainWindow(QMainWindow):
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._queue_tab._start_btn.setEnabled(False)
         elif state == "finished":
             self._start_btn.setEnabled(True)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
             self._select_btn.setEnabled(True)
+            self._queue_tab._set_queue_state(self._queue_tab._queue_state)
 
     def _on_select_video(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -472,6 +475,9 @@ class MainWindow(QMainWindow):
 
     def _on_start(self):
         if not self._input_path:
+            return
+        if self._queue_tab._queue_state != "idle":
+            QMessageBox.warning(self, "提示", "队列正在执行中，请等待队列完成")
             return
 
         config = self._get_config()
