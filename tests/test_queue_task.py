@@ -114,6 +114,41 @@ class TestQueueTaskBackwardCompat:
         assert task.config.inference_resolution == InferenceResolution.RES_1024
 
 
+class TestQueueTaskTemporalFixCompat:
+    def test_old_brm_without_temporal_fix_defaults_true(self):
+        old_dict = {
+            "id": "tf_test",
+            "input_path": "/tmp/video.mp4",
+            "input_type": "video",
+            "config": {
+                "model_name": "BiRefNet-general",
+                "output_format": "mov_prores",
+                "background_mode": "transparent",
+            },
+            "output_dir": None,
+            "output_path": None,
+            "status": "pending",
+            "progress": 0,
+            "total": 0,
+            "phase": "inference",
+            "error": None,
+            "created_at": 1712200000.0,
+        }
+        task = QueueTask.from_dict(old_dict)
+        assert task.config.temporal_fix is True
+
+    def test_roundtrip_with_temporal_fix_false(self):
+        config = ProcessingConfig(temporal_fix=False)
+        task = QueueTask.create(
+            input_path="/tmp/video.mp4",
+            input_type=InputType.VIDEO,
+            config=config,
+        )
+        d = task.to_dict()
+        restored = QueueTask.from_dict(d)
+        assert restored.config.temporal_fix is False
+
+
 class TestQueueTaskNewFieldsSerialization:
     def test_roundtrip_with_new_config_fields(self):
         config = ProcessingConfig(

@@ -25,6 +25,7 @@ class TaskStatus(Enum):
 
 class ProcessingPhase(Enum):
     INFERENCE = "inference"
+    TEMPORAL_FIX = "temporal_fix"
     ENCODING = "encoding"
     DONE = "done"
 
@@ -81,6 +82,7 @@ class QueueTask:
                 "encoding_preset": self.config.encoding_preset.value,
                 "batch_size": self.config.batch_size,
                 "inference_resolution": self.config.inference_resolution.value,
+                "temporal_fix": self.config.temporal_fix,
             },
             "output_dir": self.output_dir,
             "output_path": self.output_path,
@@ -104,6 +106,7 @@ class QueueTask:
             encoding_preset=EncodingPreset(cfg.get("encoding_preset", "medium")),
             batch_size=cfg.get("batch_size", 1),
             inference_resolution=InferenceResolution(cfg.get("inference_resolution", 1024)),
+            temporal_fix=cfg.get("temporal_fix", True),
         )
         return cls(
             id=d["id"],

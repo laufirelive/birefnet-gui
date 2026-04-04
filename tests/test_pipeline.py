@@ -35,7 +35,7 @@ class TestMattingPipeline:
             assert info["frame_count"] == 10
             assert info["width"] == 64
             assert info["height"] == 64
-            assert len(progress_log) == 20  # 10 inference + 10 encoding
+            assert len(progress_log) == 30  # 10 inference + 10 temporal_fix + 10 encoding
 
     def test_processes_video_h264_green(self, test_video_path, temp_output_dir):
         from src.core.pipeline import MattingPipeline
@@ -192,6 +192,46 @@ class TestTwoPhasePipeline:
             info = get_video_info(output_path)
             assert info["frame_count"] == 10
             phases = set(p for _, _, p in progress_log)
+            assert phases == {"inference", "temporal_fix", "encoding"}
+
+
+@pytest.mark.skipif(not MODEL_EXISTS, reason="Model not downloaded")
+class TestTemporalFixPhase:
+    def test_process_includes_temporal_fix_phase(self, test_video_path, temp_output_dir):
+        from src.core.pipeline import MattingPipeline
+        with tempfile.TemporaryDirectory() as cache_dir:
+            cache = MaskCacheManager(cache_dir)
+            config = ProcessingConfig(temporal_fix=True)
+            output_path = os.path.join(temp_output_dir, "output.mov")
+            progress_log = []
+            pipeline = MattingPipeline(config, MODELS_DIR)
+            pipeline.process(
+                input_path=test_video_path, output_path=output_path,
+                task_id="test_temporal", cache=cache,
+                progress_callback=lambda c, t, p: progress_log.append((c, t, p)),
+            )
+            assert os.path.exists(output_path)
+            phases = [p for _, _, p in progress_log]
+            assert "inference" in phases
+            assert "temporal_fix" in phases
+            assert "encoding" in phases
+
+    def test_process_skips_temporal_fix_when_disabled(self, test_video_path, temp_output_dir):
+        from src.core.pipeline import MattingPipeline
+        with tempfile.TemporaryDirectory() as cache_dir:
+            cache = MaskCacheManager(cache_dir)
+            config = ProcessingConfig(temporal_fix=False)
+            output_path = os.path.join(temp_output_dir, "output.mov")
+            progress_log = []
+            pipeline = MattingPipeline(config, MODELS_DIR)
+            pipeline.process(
+                input_path=test_video_path, output_path=output_path,
+                task_id="test_no_temporal", cache=cache,
+                progress_callback=lambda c, t, p: progress_log.append((c, t, p)),
+            )
+            assert os.path.exists(output_path)
+            phases = set(p for _, _, p in progress_log)
+            assert "temporal_fix" not in phases
             assert phases == {"inference", "encoding"}
 
 
