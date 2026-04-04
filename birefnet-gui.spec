@@ -22,6 +22,18 @@ hidden = [
 # transformers may lazy-import model classes
 hidden += collect_submodules("transformers.models.bit")
 
+# CUDA libraries not needed for inference — saves ~500-800MB
+cuda_exclude = [
+    "cusolver*",
+    "cusparse*",
+    "npp*",
+    "nvrtc*",
+    "nvjpeg*",
+    "curand*",
+    "cufft*",
+    "nvjitlink*",
+]
+
 a = Analysis(
     ["main.py"],
     pathex=[],
@@ -45,6 +57,13 @@ a = Analysis(
     optimize=0,
     cipher=block_cipher,
 )
+
+# Filter out unnecessary CUDA libraries from binaries
+import fnmatch
+a.binaries = [
+    b for b in a.binaries
+    if not any(fnmatch.fnmatch(b[0].lower(), pat) for pat in cuda_exclude)
+]
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
