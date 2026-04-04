@@ -6,7 +6,7 @@ import pytest
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "birefnet-general")
 MODEL_EXISTS = os.path.isdir(MODEL_PATH)
 
-from src.core.inference import detect_device, get_model_path, load_model, predict
+from src.core.inference import detect_device, get_model_path, load_model, predict, predict_batch
 
 
 class TestDetectDevice:
@@ -46,6 +46,51 @@ class TestPredict:
         frame = np.random.randint(0, 255, (1080, 1920, 3), dtype=np.uint8)
         alpha = predict(self.model, frame, self.device)
         assert alpha.shape == (1080, 1920)
+
+
+@pytest.fixture
+def loaded_model():
+    device = detect_device()
+    model = load_model(MODEL_PATH, device)
+    return model, device
+
+
+@pytest.mark.skipif(not MODEL_EXISTS, reason="Model not downloaded")
+class TestPredictBatch:
+    def test_batch_returns_list_of_masks(self, loaded_model):
+        model, device = loaded_model
+        frames = [np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8) for _ in range(3)]
+        masks = predict_batch(model, frames, device)
+        assert len(masks) == 3
+        for mask in masks:
+            assert mask.shape == (64, 64)
+            assert mask.dtype == np.uint8
+
+    def test_batch_size_one_matches_single(self, loaded_model):
+        model, device = loaded_model
+        frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        single_mask = predict(model, frame, device)
+        batch_masks = predict_batch(model, [frame], device)
+        assert len(batch_masks) == 1
+        np.testing.assert_array_equal(batch_masks[0], single_mask)
+
+
+@pytest.mark.skipif(not MODEL_EXISTS, reason="Model not downloaded")
+class TestPredictResolution:
+    def test_predict_with_512_resolution(self, loaded_model):
+        model, device = loaded_model
+        frame = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        mask = predict(model, frame, device, resolution=512)
+        assert mask.shape == (64, 64)
+        assert mask.dtype == np.uint8
+
+    def test_predict_batch_with_resolution(self, loaded_model):
+        model, device = loaded_model
+        frames = [np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8) for _ in range(2)]
+        masks = predict_batch(model, frames, device, resolution=512)
+        assert len(masks) == 2
+        for mask in masks:
+            assert mask.shape == (64, 64)
 
 
 class TestGetModelPath:
