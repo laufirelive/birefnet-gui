@@ -124,14 +124,6 @@ def create_writer(
         return ProResWriter(output_path, width, height, fps)
 
     if fmt == OutputFormat.WEBM_VP9:
-        if is_alpha:
-            return FFmpegWriter(
-                output_path, width, height, fps,
-                codec="libvpx-vp9",
-                pix_fmt="yuva420p",
-                input_pix_fmt="rgba",
-                extra_args=["-auto-alt-ref", "0"],
-            )
         return FFmpegWriter(
             output_path, width, height, fps,
             codec="libvpx-vp9",

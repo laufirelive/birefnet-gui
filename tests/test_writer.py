@@ -30,7 +30,7 @@ class TestFFmpegWriter:
         assert info["height"] == 64
         assert info["frame_count"] == 5
 
-    def test_writes_webm_vp9_with_alpha(self, temp_output_dir):
+    def test_writes_webm_vp9(self, temp_output_dir):
         output_path = os.path.join(temp_output_dir, "test.webm")
         writer = FFmpegWriter(
             output_path=output_path,
@@ -38,12 +38,11 @@ class TestFFmpegWriter:
             height=64,
             fps=30.0,
             codec="libvpx-vp9",
-            pix_fmt="yuva420p",
-            input_pix_fmt="rgba",
+            pix_fmt="yuv420p",
             extra_args=["-auto-alt-ref", "0"],
         )
         for _ in range(5):
-            frame = np.full((64, 64, 4), 128, dtype=np.uint8)
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
             writer.write_frame(frame)
         writer.close()
 

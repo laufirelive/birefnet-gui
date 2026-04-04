@@ -15,7 +15,6 @@ class OutputFormat(Enum):
     def supports_alpha(self) -> bool:
         return self in {
             OutputFormat.MOV_PRORES,
-            OutputFormat.WEBM_VP9,
             OutputFormat.PNG_SEQUENCE,
             OutputFormat.TIFF_SEQUENCE,
         }

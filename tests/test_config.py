@@ -16,11 +16,12 @@ class TestOutputFormat:
 
     def test_supports_alpha(self):
         alpha_formats = {
-            OutputFormat.MOV_PRORES, OutputFormat.WEBM_VP9,
+            OutputFormat.MOV_PRORES,
             OutputFormat.PNG_SEQUENCE, OutputFormat.TIFF_SEQUENCE,
         }
         no_alpha = {
             OutputFormat.MP4_H264, OutputFormat.MP4_H265, OutputFormat.MP4_AV1,
+            OutputFormat.WEBM_VP9,
         }
         for fmt in alpha_formats:
             assert fmt.supports_alpha is True
