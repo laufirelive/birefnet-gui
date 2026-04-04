@@ -153,7 +153,12 @@ class QueueTab(QWidget):
         if task.status == TaskStatus.CANCELLED:
             return "已取消"
         if task.status == TaskStatus.PROCESSING:
-            phase = "推理" if task.phase == ProcessingPhase.INFERENCE else "编码"
+            phase_map = {
+                ProcessingPhase.INFERENCE: "推理",
+                ProcessingPhase.TEMPORAL_FIX: "时序修复",
+                ProcessingPhase.ENCODING: "编码",
+            }
+            phase = phase_map.get(task.phase, "处理")
             if task.total > 0:
                 return f"{phase} {task.progress}/{task.total}"
             return f"{phase}中..."
@@ -322,14 +327,19 @@ class QueueTab(QWidget):
 
         task.progress = current
         task.total = total
-        task.phase = ProcessingPhase.INFERENCE if phase == "inference" else ProcessingPhase.ENCODING
+        if phase == "inference":
+            task.phase = ProcessingPhase.INFERENCE
+        elif phase == "temporal_fix":
+            task.phase = ProcessingPhase.TEMPORAL_FIX
+        else:
+            task.phase = ProcessingPhase.ENCODING
 
         if phase != self._current_phase:
             self._current_phase = phase
             self._start_time = time.time()
-            # Disable pause during encoding — can't resume a partial video file
-            is_encoding = phase == "encoding"
-            self._pause_btn.setEnabled(not is_encoding and self._queue_state == "running")
+            # Disable pause during encoding or temporal_fix — can't resume these phases
+            is_non_pausable = phase in ("encoding", "temporal_fix")
+            self._pause_btn.setEnabled(not is_non_pausable and self._queue_state == "running")
 
         percent = int(current / total * 100) if total > 0 else 0
         self._progress_bar.setValue(percent)
@@ -340,7 +350,12 @@ class QueueTab(QWidget):
             remaining = (total - current) / fps if fps > 0 else 0
             rem_min = int(remaining // 60)
             rem_sec = int(remaining % 60)
-            phase_label = {"inference": "推理中", "encoding": "编码中", "processing": "处理中"}.get(phase, phase)
+            phase_label = {
+                "inference": "推理中",
+                "temporal_fix": "时序修复中",
+                "encoding": "编码中",
+                "processing": "处理中",
+            }.get(phase, phase)
             self._status_label.setText(
                 f"{phase_label}: {current}/{total} | {fps:.1f} FPS | 剩余: {rem_min:02d}:{rem_sec:02d}"
             )

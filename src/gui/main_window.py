@@ -29,6 +29,7 @@ from src.core.config import (
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import QueueTask, TaskStatus
 from src.core.video import get_video_info
+from src.gui.model_tab import ModelTab
 from src.gui.queue_tab import QueueTab
 from src.gui.settings_panel import SettingsPanel
 from src.worker.matting_worker import MattingWorker
@@ -59,6 +60,11 @@ class MainWindow(QMainWindow):
         self._init_ui()
         self.setAcceptDrops(True)
         self._set_state("initial")
+
+        # First launch: if no models installed, switch to model tab
+        if not self._model_tab.has_any_model():
+            self._tabs.setCurrentWidget(self._model_tab)
+            self._start_btn.setEnabled(False)
 
     def _init_ui(self):
         central = QWidget()
@@ -147,6 +153,16 @@ class MainWindow(QMainWindow):
             lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
         )
         self._tabs.addTab(self._queue_tab, self._get_queue_tab_title())
+
+        # --- Tab 3: Model Management ---
+        self._model_tab = ModelTab(MODELS_DIR)
+        self._model_tab.models_changed.connect(self._on_models_changed)
+        self._tabs.addTab(self._model_tab, "模型管理")
+
+        # Connect "管理模型..." button
+        self._settings_panel._manage_models_btn.clicked.connect(
+            lambda: self._tabs.setCurrentWidget(self._model_tab)
+        )
 
         # --- Bottom action bar (fixed, visible only on single-task tab) ---
         self._action_bar = QWidget()
@@ -393,6 +409,10 @@ class MainWindow(QMainWindow):
     def _on_start(self):
         if not self._input_path:
             return
+        if not self._model_tab.has_any_model():
+            QMessageBox.warning(self, "提示", "请先在「模型管理」中下载至少一个模型")
+            self._tabs.setCurrentWidget(self._model_tab)
+            return
         if self._queue_tab._queue_state != "idle":
             QMessageBox.warning(self, "提示", "队列正在执行中，请等待队列完成")
             return
@@ -458,7 +478,12 @@ class MainWindow(QMainWindow):
             remaining = (total - current) / fps if fps > 0 else 0
             rem_min = int(remaining // 60)
             rem_sec = int(remaining % 60)
-            phase_label = {"inference": "推理中", "encoding": "编码中", "processing": "处理中"}.get(phase, phase)
+            phase_label = {
+                "inference": "推理中",
+                "temporal_fix": "时序修复中",
+                "encoding": "编码中",
+                "processing": "处理中",
+            }.get(phase, phase)
             self._status_label.setText(
                 f"{phase_label}: {current}/{total} | {fps:.1f} FPS | 剩余: {rem_min:02d}:{rem_sec:02d}"
             )
@@ -523,6 +548,10 @@ class MainWindow(QMainWindow):
         self._settings_panel.set_input_type(None)
 
         self.statusBar().showMessage("已加入队列", 3000)
+
+    def _on_models_changed(self):
+        """Refresh model combo when models are installed/deleted."""
+        self._settings_panel.refresh_models()
 
     def _on_queue_running_changed(self, running: bool):
         """Disable single-task start when queue is running, but allow file selection + enqueue."""
