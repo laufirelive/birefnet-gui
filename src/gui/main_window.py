@@ -32,7 +32,7 @@ from src.core.config import (
 )
 from src.core.inference import detect_device
 from src.core.queue_manager import QueueManager
-from src.core.queue_task import QueueTask
+from src.core.queue_task import QueueTask, TaskStatus
 from src.core.video import get_video_info
 from src.gui.queue_tab import QueueTab
 from src.worker.matting_worker import MattingWorker
@@ -609,11 +609,19 @@ class MainWindow(QMainWindow):
             self._set_state(self._state)
 
     def closeEvent(self, event):
-        self._queue_manager.save()
+        # Stop single-task worker
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._worker.wait()
+        # Stop queue worker: disconnect signals first to prevent CANCELLED overwrite
         if hasattr(self, '_queue_tab') and self._queue_tab._current_worker:
-            self._queue_tab._current_worker.cancel()
-            self._queue_tab._current_worker.wait()
+            worker = self._queue_tab._current_worker
+            worker.disconnect()
+            worker.cancel()
+            worker.wait()
+            # Mark running task as PAUSED so it can resume next time
+            task = self._queue_tab._current_running_task()
+            if task and task.status in (TaskStatus.PROCESSING, TaskStatus.CANCELLED):
+                task.status = TaskStatus.PAUSED
+        self._queue_manager.save()
         event.accept()

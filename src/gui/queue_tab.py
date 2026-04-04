@@ -128,7 +128,8 @@ class QueueTab(QWidget):
         for task in self._qm.tasks:
             row = self._table.rowCount()
             self._table.insertRow(row)
-            self._table.setItem(row, 0, QTableWidgetItem(os.path.basename(task.input_path)))
+            display_name = os.path.basename(task.input_path.rstrip(os.sep)) or task.input_path
+            self._table.setItem(row, 0, QTableWidgetItem(display_name))
             model_dir = MODELS.get(task.config.model_name, task.config.model_name)
             self._table.setItem(row, 1, QTableWidgetItem(model_dir))
             self._table.setItem(row, 2, QTableWidgetItem(task.config.output_format.value))
