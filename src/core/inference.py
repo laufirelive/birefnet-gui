@@ -80,7 +80,11 @@ def predict(model, frame: np.ndarray, device: str, resolution: int = 1024) -> np
 
     # Inference
     with torch.no_grad():
-        preds = model(input_tensor)[-1]
+        if device == "cuda":
+            with torch.autocast("cuda", dtype=torch.float16):
+                preds = model(input_tensor)[-1]
+        else:
+            preds = model(input_tensor)[-1]
         pred = torch.sigmoid(preds[0, 0])
 
     # Resize back to original resolution
@@ -124,7 +128,11 @@ def predict_batch(
         tensors.append(transform(image))
     batch_tensor = torch.stack(tensors).to(device)
     with torch.no_grad():
-        preds = model(batch_tensor)[-1]
+        if device == "cuda":
+            with torch.autocast("cuda", dtype=torch.float16):
+                preds = model(batch_tensor)[-1]
+        else:
+            preds = model(batch_tensor)[-1]
         preds = torch.sigmoid(preds[:, 0])
     masks = []
     for i, (orig_h, orig_w) in enumerate(orig_sizes):
