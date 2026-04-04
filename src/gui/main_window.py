@@ -186,7 +186,14 @@ class MainWindow(QMainWindow):
         output_layout.addWidget(QLabel("背景:"))
         self._mode_combo = QComboBox()
         self._populate_mode_combo()
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         output_layout.addWidget(self._mode_combo)
+
+        self._format_hint = QLabel("")
+        self._format_hint.setStyleSheet("color: #cc7700; font-size: 11px;")
+        self._format_hint.setWordWrap(True)
+        self._format_hint.hide()
+        output_layout.addWidget(self._format_hint)
 
         right_panel.addWidget(output_group)
 
@@ -220,6 +227,24 @@ class MainWindow(QMainWindow):
     def _on_format_changed(self, _index):
         """When format changes, update available background modes."""
         self._populate_mode_combo()
+        self._update_format_hint()
+
+    def _on_mode_changed(self, _index):
+        """When mode changes, update hint."""
+        self._update_format_hint()
+
+    def _update_format_hint(self):
+        """Show hint when WebM VP9 + transparent is selected."""
+        fmt = self._format_combo.currentData()
+        mode = self._mode_combo.currentData()
+        if fmt == OutputFormat.WEBM_VP9 and mode == BackgroundMode.TRANSPARENT:
+            self._format_hint.setText(
+                "提示: WebM 透明视频仅在浏览器(Chrome/Firefox)中可见，"
+                "桌面播放器可能无法显示透明效果。推荐使用 MOV ProRes 4444。"
+            )
+            self._format_hint.show()
+        else:
+            self._format_hint.hide()
 
     def _get_config(self) -> ProcessingConfig:
         """Build ProcessingConfig from current UI selections."""
