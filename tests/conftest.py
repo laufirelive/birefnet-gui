@@ -66,3 +66,29 @@ def temp_output_dir():
     yield tmpdir
     import shutil
     shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+from PIL import Image
+
+
+@pytest.fixture
+def test_image_path():
+    """Create a single 64x64 test image and return its path."""
+    tmpdir = tempfile.mkdtemp()
+    path = os.path.join(tmpdir, "test_image.png")
+    img = Image.fromarray(np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8))
+    img.save(path)
+    yield path
+    import shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+@pytest.fixture
+def test_image_folder(tmp_path):
+    """Create a folder with 3 test images."""
+    for i in range(3):
+        img = Image.fromarray(
+            np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        )
+        img.save(tmp_path / f"img_{i:03d}.png")
+    return str(tmp_path)
