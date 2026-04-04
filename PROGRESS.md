@@ -1,8 +1,8 @@
 # BiRefNet GUI 开发进度
 
 **更新日期**: 2026-04-05
-**当前版本**: P4 完成 (MVP + 音频/图片/拖拽 + 批量队列 + 高级参数/显存检测/布局重构 + FP16加速/多模型/模型管理/时序修复)
-**分支**: `feature/p4-fp16-models-temporal`
+**当前版本**: P5 完成 (部署发布: PyInstaller + GitHub Actions CI)
+**分支**: `feature/p5-deployment`
 
 ---
 
@@ -265,6 +265,47 @@ birefnet-gui/
 
 ---
 
+## 五期完成内容 (P5 部署发布)
+
+### 已实现功能
+
+| 模块 | DESIGN.md 对应章节 | 完成情况 | 说明 |
+|------|-------------------|---------|------|
+| 路径解析 | 5.1 打包策略 | ✅ 完成 | paths.py: frozen-safe 路径解析，支持 PyInstaller |
+| FFmpeg 检测 | 5.2 环境依赖 | ✅ 完成 | 启动时检测，缺失则弹窗提示安装方法 |
+| PyInstaller 配置 | 5.1 打包策略 | ✅ 完成 | --onedir 便携版，排除不需要的模块 |
+| GitHub Actions CI | 5.3 安装包类型 | ✅ 完成 | Windows (CUDA) + macOS (ARM) 双平台自动构建 |
+| 模型不内置 | 4.2 模型管理 | ✅ 设计决策 | 用户通过 GUI 下载，包体积 ~500-700MB |
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/core/paths.py` | 统一路径解析（开发/打包模式） |
+| `tests/test_paths.py` | 路径解析测试 (5个) |
+| `tests/test_main.py` | FFmpeg 检测测试 (4个) |
+| `birefnet-gui.spec` | PyInstaller 打包配置 |
+| `.github/workflows/build.yml` | GitHub Actions 双平台 CI |
+
+### 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `main.py` | FFmpeg 启动检测 + freeze_support |
+| `src/gui/main_window.py` | MODELS_DIR 改用 paths 模块 |
+| `src/gui/queue_tab.py` | models_dir 改用 paths 模块 |
+
+### 测试覆盖
+
+| 测试文件 | 测试数 | 覆盖模块 |
+|----------|--------|---------|
+| test_paths.py | 5 | 路径解析 |
+| test_main.py | 4 | FFmpeg 检测 |
+| (其余测试不变) | 156 | — |
+| **合计** | **165** | **全部通过** |
+
+---
+
 ## 未完成功能 (后续开发)
 
 以下按 DESIGN.md 章节逐项列出所有待开发功能，分为建议优先级。
@@ -298,10 +339,11 @@ birefnet-gui/
 
 | 功能 | DESIGN.md 章节 | 说明 |
 |------|---------------|------|
+| ~~PyInstaller 打包~~ | 5.1 打包策略 | ✅ P5 已完成 |
+| ~~GitHub Actions CI~~ | 5.3 安装包类型 | ✅ P5 已完成 |
 | ONNX/TensorRT 加速 | 2.1 加速方案 | 可选推理加速 |
-| PyInstaller 打包 | 5.1 打包策略 | Windows EXE 生成 |
-| 安装程序 | 5.3 安装包类型 | MSI/EXE 安装版 + 便携版 |
-| 全模型打包 | 5.1 打包策略 | 6 个模型全部内置 (~3GB) |
+| 安装版 (MSI/EXE) | 5.3 安装包类型 | 目前仅便携版 |
+| 全模型打包 | 5.1 打包策略 | 目前不内置模型，用户通过 GUI 下载 |
 
 ---
 
