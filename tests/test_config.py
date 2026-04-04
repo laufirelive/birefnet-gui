@@ -5,6 +5,8 @@ from src.core.config import (
     IMAGE_EXTENSIONS,
     InferenceResolution,
     InputType,
+    ModelInfo,
+    MODEL_REGISTRY,
     MODELS,
     OutputFormat,
     ProcessingConfig,
@@ -136,6 +138,48 @@ class TestProcessingConfigExtended:
         assert config.encoding_preset == EncodingPreset.SLOW
         assert config.batch_size == 4
         assert config.inference_resolution == InferenceResolution.RES_2048
+
+
+class TestModelInfo:
+    def test_model_info_fields(self):
+        info = MODEL_REGISTRY["general"]
+        assert info.key == "general"
+        assert info.dir_name == "birefnet-general"
+        assert info.repo_id == "zhengpeng7/BiRefNet"
+        assert info.display_name == "BiRefNet-general"
+        assert isinstance(info.description, str)
+        assert isinstance(info.use_case, str)
+        assert info.size_mb > 0
+
+
+class TestModelRegistry:
+    def test_registry_has_six_models(self):
+        assert len(MODEL_REGISTRY) == 6
+
+    def test_all_expected_keys_present(self):
+        expected = {"general", "lite", "hr", "matting", "hr-matting", "dynamic"}
+        assert set(MODEL_REGISTRY.keys()) == expected
+
+    def test_all_entries_are_model_info(self):
+        for key, info in MODEL_REGISTRY.items():
+            assert isinstance(info, ModelInfo)
+            assert info.key == key
+
+    def test_display_names_match_models_dict(self):
+        from src.core.config import MODELS
+        for key, info in MODEL_REGISTRY.items():
+            assert info.display_name in MODELS
+            assert MODELS[info.display_name] == info.dir_name
+
+
+class TestProcessingConfigTemporalFix:
+    def test_temporal_fix_default_true(self):
+        config = ProcessingConfig()
+        assert config.temporal_fix is True
+
+    def test_temporal_fix_can_be_disabled(self):
+        config = ProcessingConfig(temporal_fix=False)
+        assert config.temporal_fix is False
 
 
 class TestProcessingConfig:

@@ -106,6 +106,27 @@ MODELS = {
 }
 
 
+@dataclass
+class ModelInfo:
+    key: str
+    dir_name: str
+    repo_id: str
+    display_name: str
+    description: str
+    use_case: str
+    size_mb: int
+
+
+MODEL_REGISTRY: dict[str, "ModelInfo"] = {
+    "general": ModelInfo(key="general", dir_name="birefnet-general", repo_id="zhengpeng7/BiRefNet", display_name="BiRefNet-general", description="通用模型，效果均衡", use_case="大多数场景（默认推荐）", size_mb=424),
+    "lite": ModelInfo(key="lite", dir_name="birefnet-lite", repo_id="zhengpeng7/BiRefNet_lite", display_name="BiRefNet-lite", description="轻量快速，精度略低", use_case="显存不足/追求速度", size_mb=210),
+    "hr": ModelInfo(key="hr", dir_name="birefnet-hr", repo_id="zhengpeng7/BiRefNet_HR", display_name="BiRefNet-HR", description="高分辨率优化", use_case="4K 视频", size_mb=450),
+    "matting": ModelInfo(key="matting", dir_name="birefnet-matting", repo_id="zhengpeng7/BiRefNet-matting", display_name="BiRefNet-matting", description="专注 matting，边缘细腻", use_case="人像/头发丝细节", size_mb=424),
+    "hr-matting": ModelInfo(key="hr-matting", dir_name="birefnet-hr-matting", repo_id="zhengpeng7/BiRefNet_HR-matting", display_name="BiRefNet-HR-matting", description="高分辨率 + matting 结合", use_case="高分辨率人像", size_mb=450),
+    "dynamic": ModelInfo(key="dynamic", dir_name="birefnet-dynamic", repo_id="zhengpeng7/BiRefNet_dynamic", display_name="BiRefNet-dynamic", description="动态分辨率输入", use_case="不同分辨率混合输入", size_mb=424),
+}
+
+
 FORMAT_EXTENSIONS = {
     OutputFormat.MOV_PRORES: ".mov",
     OutputFormat.WEBM_VP9: ".webm",
@@ -127,3 +148,4 @@ class ProcessingConfig:
     encoding_preset: EncodingPreset = EncodingPreset.MEDIUM
     batch_size: int = 1
     inference_resolution: InferenceResolution = InferenceResolution.RES_1024
+    temporal_fix: bool = True
