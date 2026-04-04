@@ -193,3 +193,17 @@ class TestTwoPhasePipeline:
             assert info["frame_count"] == 10
             phases = set(p for _, _, p in progress_log)
             assert phases == {"inference", "encoding"}
+
+
+@pytest.mark.skipif(not MODEL_EXISTS, reason="Model not downloaded")
+class TestPipelineBatchInference:
+    def test_infer_phase_with_batch_size(self, test_video_path, temp_output_dir):
+        from src.core.config import InferenceResolution
+        from src.core.pipeline import MattingPipeline
+        config = ProcessingConfig(batch_size=2, inference_resolution=InferenceResolution.RES_512)
+        cache_dir = os.path.join(temp_output_dir, "cache")
+        cache = MaskCacheManager(cache_dir)
+        pipeline = MattingPipeline(config, MODELS_DIR)
+        pipeline.infer_phase(test_video_path, "test_batch", cache)
+        info = get_video_info(test_video_path)
+        assert cache.get_cached_count("test_batch") == info["frame_count"]

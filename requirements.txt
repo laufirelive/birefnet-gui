@@ -9,4 +9,5 @@ numpy>=1.24
 einops>=0.7
 kornia>=0.7
 timm>=0.9
+psutil>=5.9
 pytest>=7.0

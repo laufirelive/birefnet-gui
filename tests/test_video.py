@@ -56,3 +56,11 @@ class TestProResWriter:
         assert info["width"] == 64
         assert info["height"] == 64
         assert info["frame_count"] == 5
+
+
+class TestGetVideoInfoBitrate:
+    def test_bitrate_mbps_returned(self, test_video_path):
+        info = get_video_info(test_video_path)
+        assert "bitrate_mbps" in info
+        assert isinstance(info["bitrate_mbps"], float)
+        assert info["bitrate_mbps"] >= 0

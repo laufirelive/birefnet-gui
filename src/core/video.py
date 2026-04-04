@@ -5,6 +5,46 @@ import cv2
 import numpy as np
 
 
+def _get_bitrate_mbps(path: str) -> float:
+    """Get video bitrate in Mbps using ffprobe. Returns 0.0 on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=bit_rate",
+                "-of", "csv=p=0",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            bps = result.stdout.strip()
+            if bps.isdigit():
+                return int(bps) / 1_000_000
+        # Fallback: try format-level bitrate
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-show_entries", "format=bit_rate",
+                "-of", "csv=p=0",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            bps = result.stdout.strip()
+            if bps.isdigit():
+                return int(bps) / 1_000_000
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return 0.0
+
+
 def get_video_info(path: str) -> dict:
     """Get video metadata: width, height, fps, frame_count, duration."""
     if not os.path.exists(path):
@@ -22,6 +62,7 @@ def get_video_info(path: str) -> dict:
     }
     info["duration"] = info["frame_count"] / info["fps"] if info["fps"] > 0 else 0
     cap.release()
+    info["bitrate_mbps"] = _get_bitrate_mbps(path)
     return info
 
 
@@ -57,6 +98,7 @@ class ProResWriter:
         height: int,
         fps: float,
         audio_source: str | None = None,
+        profile: int = 3,
     ):
         self._output_path = output_path
         self._width = width
@@ -76,7 +118,7 @@ class ProResWriter:
 
         cmd.extend([
             "-c:v", "prores_ks",
-            "-profile:v", "4444",
+            "-profile:v", str(profile),
             "-pix_fmt", "yuva444p10le",
             "-vendor", "apl0",
         ])

@@ -4,9 +4,7 @@ import time
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
-    QComboBox,
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -21,20 +19,18 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.config import (
-    BackgroundMode,
     FORMAT_EXTENSIONS,
     IMAGE_EXTENSIONS,
     InputType,
     MODELS,
-    OutputFormat,
     ProcessingConfig,
     VIDEO_EXTENSIONS,
 )
-from src.core.inference import detect_device
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import QueueTask, TaskStatus
 from src.core.video import get_video_info
 from src.gui.queue_tab import QueueTab
+from src.gui.settings_panel import SettingsPanel
 from src.worker.matting_worker import MattingWorker
 
 # Path to bundled models directory (relative to project root)
@@ -43,32 +39,12 @@ MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models")
 # Path to queue persistence file
 BRM_PATH = os.path.join(os.path.expanduser("~"), ".birefnet-gui", "queue.brm")
 
-# Display names for output formats
-FORMAT_LABELS = {
-    OutputFormat.MOV_PRORES: "MOV ProRes 4444",
-    OutputFormat.WEBM_VP9: "WebM VP9",
-    OutputFormat.MP4_H264: "MP4 H.264",
-    OutputFormat.MP4_H265: "MP4 H.265/HEVC",
-    OutputFormat.MP4_AV1: "MP4 AV1",
-    OutputFormat.PNG_SEQUENCE: "PNG 序列",
-    OutputFormat.TIFF_SEQUENCE: "TIFF 序列",
-}
-
-# Display names for background modes
-MODE_LABELS = {
-    BackgroundMode.TRANSPARENT: "透明背景",
-    BackgroundMode.GREEN: "绿幕",
-    BackgroundMode.BLUE: "蓝幕",
-    BackgroundMode.MASK_BW: "黑底白蒙版",
-    BackgroundMode.MASK_WB: "白底黑蒙版",
-    BackgroundMode.SIDE_BY_SIDE: "原图+蒙版分轨",
-}
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("BiRefNet Video Matting Tool")
-        self.setMinimumSize(750, 500)
+        self.setMinimumSize(800, 550)
 
         self._worker = None
         self._input_path = None
@@ -87,11 +63,8 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        outer_layout = QVBoxLayout(central)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
 
         self._tabs = QTabWidget()
-        outer_layout.addWidget(self._tabs)
 
         # --- Tab 1: Single Task ---
         tab1 = QWidget()
@@ -121,7 +94,7 @@ class MainWindow(QMainWindow):
         input_row.addWidget(self._select_btn)
         left_panel.addLayout(input_row)
 
-        # Video info
+        # Video/image info
         self._info_label = QLabel("")
         self._info_label.setStyleSheet("color: gray;")
         left_panel.addWidget(self._info_label)
@@ -158,9 +131,29 @@ class MainWindow(QMainWindow):
         self._status_label.setStyleSheet("color: gray;")
         left_panel.addWidget(self._status_label)
 
-        # Control buttons
-        btn_row = QHBoxLayout()
+        left_panel.addStretch()
+
+        # --- Right panel: SettingsPanel ---
+        self._settings_panel = SettingsPanel(MODELS_DIR)
+
+        # --- Assemble tab1 ---
+        main_layout.addLayout(left_panel, stretch=2)
+        main_layout.addWidget(self._settings_panel, stretch=1)
+
+        # --- Tab 2: Queue ---
+        self._queue_tab = QueueTab(self._queue_manager, self._get_config)
+        self._queue_tab.queue_running_changed.connect(self._on_queue_running_changed)
+        self._queue_tab.task_count_changed.connect(
+            lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
+        )
+        self._tabs.addTab(self._queue_tab, self._get_queue_tab_title())
+
+        # --- Bottom action bar (fixed, visible only on single-task tab) ---
+        self._action_bar = QWidget()
+        btn_row = QHBoxLayout(self._action_bar)
+        btn_row.setContentsMargins(16, 8, 16, 8)
         btn_row.addStretch()
+
         self._start_btn = QPushButton("开始处理")
         self._start_btn.clicked.connect(self._on_start)
         btn_row.addWidget(self._start_btn)
@@ -177,95 +170,23 @@ class MainWindow(QMainWindow):
         self._enqueue_btn.clicked.connect(self._on_enqueue)
         btn_row.addWidget(self._enqueue_btn)
         btn_row.addStretch()
-        left_panel.addLayout(btn_row)
 
-        left_panel.addStretch()
+        # --- Outer layout: tabs + action bar ---
+        outer_layout = QVBoxLayout(central)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+        outer_layout.addWidget(self._tabs, stretch=1)
+        outer_layout.addWidget(self._action_bar)
 
-        # --- Right panel ---
-        right_panel = QVBoxLayout()
-        right_panel.setSpacing(12)
+        # Toggle action bar visibility with tab changes
+        self._tabs.currentChanged.connect(self._on_tab_changed)
 
-        # Model selection
-        model_group = QGroupBox("模型设置")
-        model_layout = QVBoxLayout(model_group)
-
-        model_layout.addWidget(QLabel("模型:"))
-        self._model_combo = QComboBox()
-        self._populate_model_combo()
-        model_layout.addWidget(self._model_combo)
-
-        device = detect_device()
-        device_text = {"cuda": "CUDA (GPU)", "mps": "MPS (Apple Silicon)", "cpu": "CPU"}
-        self._device_label = QLabel(f"设备: {device_text.get(device, device)}")
-        self._device_label.setStyleSheet("color: gray;")
-        model_layout.addWidget(self._device_label)
-
-        right_panel.addWidget(model_group)
-
-        # Output settings
-        output_group = QGroupBox("输出设置")
-        output_layout = QVBoxLayout(output_group)
-
-        output_layout.addWidget(QLabel("格式:"))
-        self._format_combo = QComboBox()
-        for fmt, label in FORMAT_LABELS.items():
-            self._format_combo.addItem(label, fmt)
-        self._format_combo.currentIndexChanged.connect(self._on_format_changed)
-        output_layout.addWidget(self._format_combo)
-
-        output_layout.addWidget(QLabel("背景:"))
-        self._mode_combo = QComboBox()
-        self._populate_mode_combo()
-        output_layout.addWidget(self._mode_combo)
-
-        right_panel.addWidget(output_group)
-
-        right_panel.addStretch()
-
-        # --- Assemble ---
-        main_layout.addLayout(left_panel, stretch=2)
-        main_layout.addLayout(right_panel, stretch=1)
-
-        # --- Tab 2: Queue ---
-        self._queue_tab = QueueTab(self._queue_manager, self._get_config)
-        self._queue_tab.queue_running_changed.connect(self._on_queue_running_changed)
-        self._queue_tab.task_count_changed.connect(
-            lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
-        )
-        self._tabs.addTab(self._queue_tab, self._get_queue_tab_title())
-
-    def _populate_model_combo(self):
-        """Populate model dropdown. Only show downloaded models as enabled."""
-        models_dir = os.path.abspath(MODELS_DIR)
-        for display_name, dir_name in MODELS.items():
-            model_path = os.path.join(models_dir, dir_name)
-            if os.path.isdir(model_path):
-                self._model_combo.addItem(display_name, display_name)
-            else:
-                self._model_combo.addItem(f"{display_name} (未下载)", display_name)
-                idx = self._model_combo.count() - 1
-                self._model_combo.model().item(idx).setEnabled(False)
-
-    def _populate_mode_combo(self):
-        """Populate background mode dropdown based on current format."""
-        self._mode_combo.clear()
-        current_format = self._format_combo.currentData()
-        for mode, label in MODE_LABELS.items():
-            if mode.needs_alpha and current_format and not current_format.supports_alpha:
-                continue
-            self._mode_combo.addItem(label, mode)
-
-    def _on_format_changed(self, _index):
-        """When format changes, update available background modes."""
-        self._populate_mode_combo()
+    def _on_tab_changed(self, index: int):
+        self._action_bar.setVisible(index == 0)
 
     def _get_config(self) -> ProcessingConfig:
         """Build ProcessingConfig from current UI selections."""
-        return ProcessingConfig(
-            model_name=self._model_combo.currentData(),
-            output_format=self._format_combo.currentData(),
-            background_mode=self._mode_combo.currentData(),
-        )
+        return self._settings_panel.get_config()
 
     def _set_state(self, state: str):
         self._state = state
@@ -381,9 +302,13 @@ class MainWindow(QMainWindow):
             dur = info["duration"]
             minutes = int(dur // 60)
             seconds = int(dur % 60)
+            bitrate = info.get("bitrate_mbps", 0.0)
+            bitrate_str = f" | {bitrate:.1f} Mbps" if bitrate > 0 else ""
             self._info_label.setText(
-                f"视频信息: {w}x{h} | {fps:.1f}fps | {frames}帧 | {minutes:02d}:{seconds:02d}"
+                f"视频信息: {w}x{h} | {fps:.1f}fps | {frames}帧 | {minutes:02d}:{seconds:02d}{bitrate_str}"
             )
+
+            self._settings_panel.set_source_bitrate(bitrate)
 
         elif input_type == InputType.IMAGE:
             from PIL import Image
@@ -399,6 +324,8 @@ class MainWindow(QMainWindow):
             self._input_edit.setText(path)
             self._info_label.setText(f"图片信息: {w}x{h} | {img.mode}")
 
+            self._settings_panel.set_source_bitrate(0.0)
+
         elif input_type == InputType.IMAGE_FOLDER:
             image_files = [
                 f for f in os.listdir(path)
@@ -412,13 +339,10 @@ class MainWindow(QMainWindow):
             self._input_edit.setText(path)
             self._info_label.setText(f"图片文件夹: {count} 张图片")
 
-        self._update_ui_for_input_type()
-        self._set_state("ready")
+            self._settings_panel.set_source_bitrate(0.0)
 
-    def _update_ui_for_input_type(self):
-        """Adjust output settings based on input type."""
-        is_video = self._input_type == InputType.VIDEO
-        self._format_combo.setEnabled(is_video)
+        self._settings_panel.set_input_type(input_type)
+        self._set_state("ready")
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -596,6 +520,7 @@ class MainWindow(QMainWindow):
         self._output_dir = None
         self._output_edit.setText("")
         self._set_state("initial")
+        self._settings_panel.set_input_type(None)
 
         self.statusBar().showMessage("已加入队列", 3000)
 
@@ -604,9 +529,8 @@ class MainWindow(QMainWindow):
         if running:
             self._start_btn.setEnabled(False)
             # Keep select + enqueue enabled so user can add tasks while queue runs
-            has_input = self._input_path is not None
             self._select_btn.setEnabled(True)
-            self._enqueue_btn.setEnabled(has_input)
+            self._enqueue_btn.setEnabled(self._input_path is not None)
         else:
             # Restore based on current state
             self._set_state(self._state)

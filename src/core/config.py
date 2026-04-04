@@ -40,6 +40,58 @@ class InputType(Enum):
     IMAGE_FOLDER = "image_folder"
 
 
+class BitrateMode(Enum):
+    AUTO = "auto"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    VERY_HIGH = "very_high"
+    CUSTOM = "custom"
+
+    @property
+    def multiplier(self) -> float | None:
+        return {
+            BitrateMode.AUTO: 1.0,
+            BitrateMode.LOW: 0.25,
+            BitrateMode.MEDIUM: 0.5,
+            BitrateMode.HIGH: 1.0,
+            BitrateMode.VERY_HIGH: 2.0,
+            BitrateMode.CUSTOM: None,
+        }[self]
+
+
+class EncodingPreset(Enum):
+    ULTRAFAST = "ultrafast"
+    SUPERFAST = "superfast"
+    VERYFAST = "veryfast"
+    FASTER = "faster"
+    FAST = "fast"
+    MEDIUM = "medium"
+    SLOW = "slow"
+    SLOWER = "slower"
+    VERYSLOW = "veryslow"
+
+    @property
+    def av1_cpu_used(self) -> int:
+        return {
+            EncodingPreset.ULTRAFAST: 8,
+            EncodingPreset.SUPERFAST: 7,
+            EncodingPreset.VERYFAST: 6,
+            EncodingPreset.FASTER: 5,
+            EncodingPreset.FAST: 4,
+            EncodingPreset.MEDIUM: 3,
+            EncodingPreset.SLOW: 2,
+            EncodingPreset.SLOWER: 1,
+            EncodingPreset.VERYSLOW: 0,
+        }[self]
+
+
+class InferenceResolution(Enum):
+    RES_512 = 512
+    RES_1024 = 1024
+    RES_2048 = 2048
+
+
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
 
@@ -70,3 +122,8 @@ class ProcessingConfig:
     model_name: str = "BiRefNet-general"
     output_format: OutputFormat = OutputFormat.MOV_PRORES
     background_mode: BackgroundMode = BackgroundMode.TRANSPARENT
+    bitrate_mode: BitrateMode = BitrateMode.AUTO
+    custom_bitrate_mbps: float = 20.0
+    encoding_preset: EncodingPreset = EncodingPreset.MEDIUM
+    batch_size: int = 1
+    inference_resolution: InferenceResolution = InferenceResolution.RES_1024

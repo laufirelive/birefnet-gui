@@ -5,6 +5,9 @@ from enum import Enum
 
 from src.core.config import (
     BackgroundMode,
+    BitrateMode,
+    EncodingPreset,
+    InferenceResolution,
     InputType,
     OutputFormat,
     ProcessingConfig,
@@ -73,6 +76,11 @@ class QueueTask:
                 "model_name": self.config.model_name,
                 "output_format": self.config.output_format.value,
                 "background_mode": self.config.background_mode.value,
+                "bitrate_mode": self.config.bitrate_mode.value,
+                "custom_bitrate_mbps": self.config.custom_bitrate_mbps,
+                "encoding_preset": self.config.encoding_preset.value,
+                "batch_size": self.config.batch_size,
+                "inference_resolution": self.config.inference_resolution.value,
             },
             "output_dir": self.output_dir,
             "output_path": self.output_path,
@@ -86,10 +94,16 @@ class QueueTask:
 
     @classmethod
     def from_dict(cls, d: dict) -> "QueueTask":
+        cfg = d["config"]
         config = ProcessingConfig(
-            model_name=d["config"]["model_name"],
-            output_format=OutputFormat(d["config"]["output_format"]),
-            background_mode=BackgroundMode(d["config"]["background_mode"]),
+            model_name=cfg["model_name"],
+            output_format=OutputFormat(cfg["output_format"]),
+            background_mode=BackgroundMode(cfg["background_mode"]),
+            bitrate_mode=BitrateMode(cfg.get("bitrate_mode", "auto")),
+            custom_bitrate_mbps=cfg.get("custom_bitrate_mbps", 20.0),
+            encoding_preset=EncodingPreset(cfg.get("encoding_preset", "medium")),
+            batch_size=cfg.get("batch_size", 1),
+            inference_resolution=InferenceResolution(cfg.get("inference_resolution", 1024)),
         )
         return cls(
             id=d["id"],

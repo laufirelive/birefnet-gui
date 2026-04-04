@@ -63,7 +63,8 @@ class ImagePipeline:
         if frame is None:
             raise ValueError(f"Cannot read image: {image_path}")
 
-        alpha = predict(self._model, frame, self._device)
+        resolution = self._config.inference_resolution.value
+        alpha = predict(self._model, frame, self._device, resolution=resolution)
         composed = compose_frame(frame, alpha, self._config.background_mode)
 
         base_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -124,7 +125,8 @@ class ImagePipeline:
             if frame is None:
                 continue
 
-            alpha = predict(self._model, frame, self._device)
+            resolution = self._config.inference_resolution.value
+            alpha = predict(self._model, frame, self._device, resolution=resolution)
             composed = compose_frame(frame, alpha, self._config.background_mode)
             self._save_png(composed, out_file)
 

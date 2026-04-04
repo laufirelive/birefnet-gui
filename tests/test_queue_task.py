@@ -1,7 +1,15 @@
 import json
 import time
 
-from src.core.config import BackgroundMode, InputType, OutputFormat, ProcessingConfig
+from src.core.config import (
+    BackgroundMode,
+    BitrateMode,
+    EncodingPreset,
+    InferenceResolution,
+    InputType,
+    OutputFormat,
+    ProcessingConfig,
+)
 from src.core.queue_task import ProcessingPhase, QueueTask, TaskStatus
 
 
@@ -76,3 +84,57 @@ class TestQueueTask:
         d["unknown_future_field"] = "whatever"
         restored = QueueTask.from_dict(d)
         assert restored.id == task.id
+
+
+class TestQueueTaskBackwardCompat:
+    def test_old_brm_without_new_fields_uses_defaults(self):
+        old_dict = {
+            "id": "abc123",
+            "input_path": "/tmp/video.mp4",
+            "input_type": "video",
+            "config": {
+                "model_name": "BiRefNet-general",
+                "output_format": "mov_prores",
+                "background_mode": "transparent",
+            },
+            "output_dir": None,
+            "output_path": None,
+            "status": "pending",
+            "progress": 0,
+            "total": 0,
+            "phase": "inference",
+            "error": None,
+            "created_at": 1712200000.0,
+        }
+        task = QueueTask.from_dict(old_dict)
+        assert task.config.bitrate_mode == BitrateMode.AUTO
+        assert task.config.custom_bitrate_mbps == 20.0
+        assert task.config.encoding_preset == EncodingPreset.MEDIUM
+        assert task.config.batch_size == 1
+        assert task.config.inference_resolution == InferenceResolution.RES_1024
+
+
+class TestQueueTaskNewFieldsSerialization:
+    def test_roundtrip_with_new_config_fields(self):
+        config = ProcessingConfig(
+            model_name="BiRefNet-HR",
+            output_format=OutputFormat.MP4_H265,
+            background_mode=BackgroundMode.GREEN,
+            bitrate_mode=BitrateMode.CUSTOM,
+            custom_bitrate_mbps=35.0,
+            encoding_preset=EncodingPreset.SLOW,
+            batch_size=4,
+            inference_resolution=InferenceResolution.RES_2048,
+        )
+        task = QueueTask.create(
+            input_path="/tmp/video.mp4",
+            input_type=InputType.VIDEO,
+            config=config,
+        )
+        d = task.to_dict()
+        restored = QueueTask.from_dict(d)
+        assert restored.config.bitrate_mode == BitrateMode.CUSTOM
+        assert restored.config.custom_bitrate_mbps == 35.0
+        assert restored.config.encoding_preset == EncodingPreset.SLOW
+        assert restored.config.batch_size == 4
+        assert restored.config.inference_resolution == InferenceResolution.RES_2048
