@@ -1,7 +1,8 @@
 import os
 import time
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -10,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -17,7 +19,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.core.config import BackgroundMode, MODELS, OutputFormat, ProcessingConfig
+from src.core.config import (
+    BackgroundMode,
+    IMAGE_EXTENSIONS,
+    InputType,
+    MODELS,
+    OutputFormat,
+    ProcessingConfig,
+    VIDEO_EXTENSIONS,
+)
 from src.core.inference import detect_device
 from src.core.video import get_video_info
 from src.worker.matting_worker import MattingWorker
@@ -68,8 +78,10 @@ class MainWindow(QMainWindow):
         self._input_path = None
         self._output_dir = None
         self._start_time = None
+        self._input_type = None
 
         self._init_ui()
+        self.setAcceptDrops(True)
         self._set_state("initial")
 
     def _init_ui(self):
@@ -90,8 +102,12 @@ class MainWindow(QMainWindow):
         self._input_edit.setReadOnly(True)
         self._input_edit.setPlaceholderText("未选择文件")
         input_row.addWidget(self._input_edit)
-        self._select_btn = QPushButton("选择文件")
-        self._select_btn.clicked.connect(self._on_select_file)
+        self._select_btn = QPushButton("选择文件 ▼")
+        select_menu = QMenu(self)
+        select_menu.addAction("选择视频", self._on_select_video)
+        select_menu.addAction("选择图片", self._on_select_image)
+        select_menu.addAction("选择图片文件夹", self._on_select_folder)
+        self._select_btn.setMenu(select_menu)
         input_row.addWidget(self._select_btn)
         left_panel.addLayout(input_row)
 
@@ -186,14 +202,7 @@ class MainWindow(QMainWindow):
         output_layout.addWidget(QLabel("背景:"))
         self._mode_combo = QComboBox()
         self._populate_mode_combo()
-        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         output_layout.addWidget(self._mode_combo)
-
-        self._format_hint = QLabel("")
-        self._format_hint.setStyleSheet("color: #cc7700; font-size: 11px;")
-        self._format_hint.setWordWrap(True)
-        self._format_hint.hide()
-        output_layout.addWidget(self._format_hint)
 
         right_panel.addWidget(output_group)
 
@@ -227,24 +236,6 @@ class MainWindow(QMainWindow):
     def _on_format_changed(self, _index):
         """When format changes, update available background modes."""
         self._populate_mode_combo()
-        self._update_format_hint()
-
-    def _on_mode_changed(self, _index):
-        """When mode changes, update hint."""
-        self._update_format_hint()
-
-    def _update_format_hint(self):
-        """Show hint when WebM VP9 + transparent is selected."""
-        fmt = self._format_combo.currentData()
-        mode = self._mode_combo.currentData()
-        if fmt == OutputFormat.WEBM_VP9 and mode == BackgroundMode.TRANSPARENT:
-            self._format_hint.setText(
-                "提示: WebM 透明视频仅在浏览器(Chrome/Firefox)中可见，"
-                "桌面播放器可能无法显示透明效果。推荐使用 MOV ProRes 4444。"
-            )
-            self._format_hint.show()
-        else:
-            self._format_hint.hide()
 
     def _get_config(self) -> ProcessingConfig:
         """Build ProcessingConfig from current UI selections."""
@@ -286,36 +277,127 @@ class MainWindow(QMainWindow):
             self._cancel_btn.setEnabled(False)
             self._select_btn.setEnabled(True)
 
-    def _on_select_file(self):
+    def _on_select_video(self):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "选择视频文件",
             "",
             "视频文件 (*.mp4 *.avi *.mov *.mkv);;所有文件 (*)",
         )
-        if not path:
-            return
+        if path:
+            self._handle_input(path)
 
-        try:
-            info = get_video_info(path)
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"无法读取视频文件:\n{e}")
-            return
-
-        self._input_path = path
-        self._input_edit.setText(path)
-
-        w, h = info["width"], info["height"]
-        fps = info["fps"]
-        frames = info["frame_count"]
-        dur = info["duration"]
-        minutes = int(dur // 60)
-        seconds = int(dur % 60)
-        self._info_label.setText(
-            f"视频信息: {w}x{h} | {fps:.1f}fps | {frames}帧 | {minutes:02d}:{seconds:02d}"
+    def _on_select_image(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择图片文件",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tiff *.tif *.webp);;所有文件 (*)",
         )
+        if path:
+            self._handle_input(path)
 
+    def _on_select_folder(self):
+        path = QFileDialog.getExistingDirectory(self, "选择图片文件夹")
+        if path:
+            self._handle_input(path)
+
+    def _classify_input(self, path: str) -> InputType | None:
+        """Determine input type from a file or directory path."""
+        if os.path.isdir(path):
+            has_images = any(
+                os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+                for f in os.listdir(path)
+                if os.path.isfile(os.path.join(path, f))
+            )
+            return InputType.IMAGE_FOLDER if has_images else None
+
+        ext = os.path.splitext(path)[1].lower()
+        if ext in VIDEO_EXTENSIONS:
+            return InputType.VIDEO
+        if ext in IMAGE_EXTENSIONS:
+            return InputType.IMAGE
+        return None
+
+    def _handle_input(self, path: str):
+        """Unified entry point for all input methods (file dialog, drag-and-drop)."""
+        input_type = self._classify_input(path)
+
+        if input_type is None:
+            QMessageBox.warning(
+                self, "不支持的文件",
+                f"无法识别的文件类型:\n{path}\n\n"
+                "支持的格式: 视频(MP4/AVI/MOV/MKV) | 图片(PNG/JPG/TIFF/BMP/WebP)",
+            )
+            return
+
+        if input_type == InputType.VIDEO:
+            try:
+                info = get_video_info(path)
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"无法读取视频文件:\n{e}")
+                return
+
+            self._input_path = path
+            self._input_type = input_type
+            self._input_edit.setText(path)
+
+            w, h = info["width"], info["height"]
+            fps = info["fps"]
+            frames = info["frame_count"]
+            dur = info["duration"]
+            minutes = int(dur // 60)
+            seconds = int(dur % 60)
+            self._info_label.setText(
+                f"视频信息: {w}x{h} | {fps:.1f}fps | {frames}帧 | {minutes:02d}:{seconds:02d}"
+            )
+
+        elif input_type == InputType.IMAGE:
+            from PIL import Image
+            try:
+                img = Image.open(path)
+                w, h = img.size
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"无法读取图片:\n{e}")
+                return
+
+            self._input_path = path
+            self._input_type = input_type
+            self._input_edit.setText(path)
+            self._info_label.setText(f"图片信息: {w}x{h} | {img.mode}")
+
+        elif input_type == InputType.IMAGE_FOLDER:
+            image_files = [
+                f for f in os.listdir(path)
+                if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS
+                and os.path.isfile(os.path.join(path, f))
+            ]
+            count = len(image_files)
+
+            self._input_path = path
+            self._input_type = input_type
+            self._input_edit.setText(path)
+            self._info_label.setText(f"图片文件夹: {count} 张图片")
+
+        self._update_ui_for_input_type()
         self._set_state("ready")
+
+    def _update_ui_for_input_type(self):
+        """Adjust output settings based on input type."""
+        is_video = self._input_type == InputType.VIDEO
+        self._format_combo.setEnabled(is_video)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent):
+        urls = event.mimeData().urls()
+        if not urls:
+            return
+        path = urls[0].toLocalFile()
+        if path:
+            self._handle_input(path)
 
     def _on_select_output(self):
         directory = QFileDialog.getExistingDirectory(self, "选择输出目录")
@@ -324,21 +406,31 @@ class MainWindow(QMainWindow):
             self._output_edit.setText(directory)
 
     def _build_output_path(self) -> str:
+        """Build output path based on input type."""
         config = self._get_config()
-        base_name = os.path.splitext(os.path.basename(self._input_path))[0]
         model_dir_name = MODELS[config.model_name]
         timestamp = int(time.time() * 1000)
-        ext = FORMAT_EXTENSIONS[config.output_format]
 
-        if ext:
-            filename = f"{base_name}_{model_dir_name}_{timestamp}{ext}"
+        if self._input_type == InputType.VIDEO:
+            base_name = os.path.splitext(os.path.basename(self._input_path))[0]
+            ext = FORMAT_EXTENSIONS[config.output_format]
+            if ext:
+                filename = f"{base_name}_{model_dir_name}_{timestamp}{ext}"
+            else:
+                filename = f"{base_name}_{model_dir_name}_{timestamp}"
+            if self._output_dir:
+                return os.path.join(self._output_dir, filename)
+            else:
+                return os.path.join(os.path.dirname(self._input_path), filename)
         else:
-            filename = f"{base_name}_{model_dir_name}_{timestamp}"
-
-        if self._output_dir:
-            return os.path.join(self._output_dir, filename)
-        else:
-            return os.path.join(os.path.dirname(self._input_path), filename)
+            # For image input, return the output directory
+            if self._output_dir:
+                return self._output_dir
+            else:
+                if os.path.isdir(self._input_path):
+                    return os.path.dirname(self._input_path)
+                else:
+                    return os.path.dirname(self._input_path)
 
     def _on_start(self):
         if not self._input_path:
@@ -363,7 +455,10 @@ class MainWindow(QMainWindow):
         self._set_state("processing")
         self._status_label.setText("正在加载模型...")
 
-        self._worker = MattingWorker(config, models_dir, self._input_path, output_path)
+        self._worker = MattingWorker(
+            config, models_dir, self._input_path, output_path,
+            input_type=self._input_type,
+        )
         self._worker.progress.connect(self._on_progress)
         self._worker.speed.connect(self._on_speed)
         self._worker.finished.connect(self._on_finished)
@@ -414,11 +509,14 @@ class MainWindow(QMainWindow):
         seconds = int(elapsed % 60)
         self._status_label.setText(f"处理完成! 耗时: {minutes:02d}:{seconds:02d}")
 
-        QMessageBox.information(
-            self,
-            "完成",
-            f"视频处理完成!\n\n输出文件:\n{output_path}",
-        )
+        if self._input_type == InputType.VIDEO:
+            msg = f"视频处理完成!\n\n输出文件:\n{output_path}"
+        elif self._input_type == InputType.IMAGE:
+            msg = f"图片处理完成!\n\n输出文件:\n{output_path}"
+        else:
+            msg = f"图片文件夹处理完成!\n\n输出目录:\n{output_path}"
+
+        QMessageBox.information(self, "完成", msg)
 
     def _on_error(self, message: str):
         self._set_state("ready")
