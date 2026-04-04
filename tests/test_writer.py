@@ -209,3 +209,41 @@ class TestCreateWriterAdvanced:
         writer = create_writer(config, output_path, 64, 64, 30.0, source_bitrate_mbps=20.0)
         assert isinstance(writer, ProResWriter)
         writer.close()
+
+    def test_prores_alpha_forces_profile_4444(self, temp_output_dir):
+        """ProRes profiles 0-3 are 422 and silently drop alpha. Ensure profile >= 4 when alpha needed."""
+        from unittest.mock import patch
+        from src.core.config import BitrateMode
+        from src.core.video import ProResWriter
+
+        for bitrate_mode in [BitrateMode.AUTO, BitrateMode.LOW, BitrateMode.HIGH]:
+            config = ProcessingConfig(
+                output_format=OutputFormat.MOV_PRORES,
+                background_mode=BackgroundMode.TRANSPARENT,
+                bitrate_mode=bitrate_mode,
+            )
+            output_path = os.path.join(temp_output_dir, f"test_alpha_{bitrate_mode.value}.mov")
+            with patch("src.core.writer.ProResWriter") as mock_prores:
+                create_writer(config, output_path, 64, 64, 30.0)
+                _, kwargs = mock_prores.call_args
+                assert kwargs["profile"] >= 4, (
+                    f"Alpha mode with {bitrate_mode} got profile {kwargs['profile']}, "
+                    f"needs >= 4 (ProRes 4444) to preserve alpha"
+                )
+
+    def test_prores_non_alpha_allows_422_profiles(self, temp_output_dir):
+        """Non-alpha modes can use any ProRes profile (0-3 are 422)."""
+        from unittest.mock import patch
+        from src.core.config import BitrateMode
+        from src.core.video import ProResWriter
+
+        config = ProcessingConfig(
+            output_format=OutputFormat.MOV_PRORES,
+            background_mode=BackgroundMode.GREEN,
+            bitrate_mode=BitrateMode.LOW,  # maps to profile 0 (Proxy)
+        )
+        output_path = os.path.join(temp_output_dir, "test_noalpha.mov")
+        with patch("src.core.writer.ProResWriter") as mock_prores:
+            create_writer(config, output_path, 64, 64, 30.0)
+            _, kwargs = mock_prores.call_args
+            assert kwargs["profile"] == 0
