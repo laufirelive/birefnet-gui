@@ -4,7 +4,7 @@ import subprocess
 import numpy as np
 from PIL import Image
 
-from src.core.config import BackgroundMode, OutputFormat, ProcessingConfig
+from src.core.config import BackgroundMode, BitrateMode, OutputFormat, ProcessingConfig
 from src.core.video import ProResWriter
 
 
@@ -22,6 +22,8 @@ class FFmpegWriter:
         input_pix_fmt: str = "rgb24",
         extra_args: list[str] | None = None,
         audio_source: str | None = None,
+        bitrate_kbps: int | None = None,
+        preset: str | None = None,
     ):
         self._width = width
         self._height = height
@@ -39,6 +41,12 @@ class FFmpegWriter:
             cmd.extend(["-i", audio_source])
 
         cmd.extend(["-c:v", codec, "-pix_fmt", pix_fmt])
+
+        if bitrate_kbps is not None:
+            cmd.extend(["-b:v", f"{bitrate_kbps}k"])
+        if preset is not None:
+            if codec not in ("libaom-av1",):
+                cmd.extend(["-preset", preset])
 
         if extra_args:
             cmd.extend(extra_args)
@@ -113,6 +121,23 @@ class ImageSequenceWriter:
         pass  # No resources to release
 
 
+def _resolve_bitrate_kbps(config: ProcessingConfig, source_bitrate_mbps: float) -> int | None:
+    mode = config.bitrate_mode
+    if mode == BitrateMode.CUSTOM:
+        return int(config.custom_bitrate_mbps * 1000)
+    multiplier = mode.multiplier
+    if multiplier is not None:
+        return int(source_bitrate_mbps * multiplier * 1000)
+    return None
+
+
+def _resolve_prores_profile(config: ProcessingConfig) -> int:
+    return {
+        BitrateMode.AUTO: 3, BitrateMode.LOW: 0, BitrateMode.MEDIUM: 1,
+        BitrateMode.HIGH: 2, BitrateMode.VERY_HIGH: 3, BitrateMode.CUSTOM: 3,
+    }[config.bitrate_mode]
+
+
 def create_writer(
     config: ProcessingConfig,
     output_path: str,
@@ -120,6 +145,7 @@ def create_writer(
     height: int,
     fps: float,
     audio_source: str | None = None,
+    source_bitrate_mbps: float = 0.0,
 ):
     """Factory: return the appropriate writer based on config."""
     fmt = config.output_format
@@ -130,7 +156,11 @@ def create_writer(
         width = width * 2
 
     if fmt == OutputFormat.MOV_PRORES:
-        return ProResWriter(output_path, width, height, fps, audio_source=audio_source)
+        profile = _resolve_prores_profile(config)
+        return ProResWriter(output_path, width, height, fps, audio_source=audio_source, profile=profile)
+
+    bitrate_kbps = _resolve_bitrate_kbps(config, source_bitrate_mbps)
+    preset = config.encoding_preset.value
 
     if fmt == OutputFormat.WEBM_VP9:
         if is_alpha:
@@ -141,6 +171,8 @@ def create_writer(
                 input_pix_fmt="rgba",
                 extra_args=["-auto-alt-ref", "0"],
                 audio_source=audio_source,
+                bitrate_kbps=bitrate_kbps,
+                preset=preset,
             )
         return FFmpegWriter(
             output_path, width, height, fps,
@@ -148,6 +180,8 @@ def create_writer(
             pix_fmt="yuv420p",
             extra_args=["-auto-alt-ref", "0"],
             audio_source=audio_source,
+            bitrate_kbps=bitrate_kbps,
+            preset=preset,
         )
 
     if fmt == OutputFormat.MP4_H264:
@@ -156,6 +190,8 @@ def create_writer(
             codec="libx264",
             pix_fmt="yuv420p",
             audio_source=audio_source,
+            bitrate_kbps=bitrate_kbps,
+            preset=preset,
         )
 
     if fmt == OutputFormat.MP4_H265:
@@ -165,15 +201,19 @@ def create_writer(
             pix_fmt="yuv420p",
             extra_args=["-tag:v", "hvc1"],
             audio_source=audio_source,
+            bitrate_kbps=bitrate_kbps,
+            preset=preset,
         )
 
     if fmt == OutputFormat.MP4_AV1:
+        av1_cpu_used = config.encoding_preset.av1_cpu_used
         return FFmpegWriter(
             output_path, width, height, fps,
             codec="libaom-av1",
             pix_fmt="yuv420p",
-            extra_args=["-cpu-used", "8", "-row-mt", "1"],
+            extra_args=["-cpu-used", str(av1_cpu_used), "-row-mt", "1"],
             audio_source=audio_source,
+            bitrate_kbps=bitrate_kbps,
         )
 
     if fmt in (OutputFormat.PNG_SEQUENCE, OutputFormat.TIFF_SEQUENCE):

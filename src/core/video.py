@@ -98,6 +98,7 @@ class ProResWriter:
         height: int,
         fps: float,
         audio_source: str | None = None,
+        profile: int = 3,
     ):
         self._output_path = output_path
         self._width = width
@@ -117,7 +118,7 @@ class ProResWriter:
 
         cmd.extend([
             "-c:v", "prores_ks",
-            "-profile:v", "4444",
+            "-profile:v", str(profile),
             "-pix_fmt", "yuva444p10le",
             "-vendor", "apl0",
         ])

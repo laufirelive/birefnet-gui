@@ -143,3 +143,69 @@ class TestCreateWriter:
         writer = create_writer(config, seq_dir, 64, 64, 30.0)
         assert isinstance(writer, ImageSequenceWriter)
         writer.close()
+
+
+class TestFFmpegWriterBitrate:
+    def test_writes_h264_with_bitrate(self, temp_output_dir):
+        output_path = os.path.join(temp_output_dir, "test_br.mp4")
+        writer = FFmpegWriter(
+            output_path=output_path, width=64, height=64, fps=30.0,
+            codec="libx264", pix_fmt="yuv420p", bitrate_kbps=5000,
+        )
+        for _ in range(5):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+        assert os.path.exists(output_path)
+
+    def test_writes_h264_with_preset(self, temp_output_dir):
+        output_path = os.path.join(temp_output_dir, "test_preset.mp4")
+        writer = FFmpegWriter(
+            output_path=output_path, width=64, height=64, fps=30.0,
+            codec="libx264", pix_fmt="yuv420p", preset="fast",
+        )
+        for _ in range(5):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+        assert os.path.exists(output_path)
+
+
+class TestProResWriterProfile:
+    def test_writes_prores_with_profile(self, temp_output_dir):
+        from src.core.video import ProResWriter
+        output_path = os.path.join(temp_output_dir, "test_profile.mov")
+        writer = ProResWriter(output_path, 64, 64, 30.0, profile=0)
+        for _ in range(5):
+            frame = np.full((64, 64, 4), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+        assert os.path.exists(output_path)
+
+
+class TestCreateWriterAdvanced:
+    def test_h264_with_bitrate_and_preset(self, temp_output_dir):
+        from src.core.config import BitrateMode, EncodingPreset
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+            bitrate_mode=BitrateMode.CUSTOM,
+            custom_bitrate_mbps=10.0,
+            encoding_preset=EncodingPreset.FAST,
+        )
+        output_path = os.path.join(temp_output_dir, "test_adv.mp4")
+        writer = create_writer(config, output_path, 64, 64, 30.0, source_bitrate_mbps=20.0)
+        assert isinstance(writer, FFmpegWriter)
+        writer.close()
+
+    def test_prores_uses_profile_not_bitrate(self, temp_output_dir):
+        from src.core.config import BitrateMode
+        from src.core.video import ProResWriter
+        config = ProcessingConfig(
+            output_format=OutputFormat.MOV_PRORES,
+            bitrate_mode=BitrateMode.LOW,
+        )
+        output_path = os.path.join(temp_output_dir, "test_pr.mov")
+        writer = create_writer(config, output_path, 64, 64, 30.0, source_bitrate_mbps=20.0)
+        assert isinstance(writer, ProResWriter)
+        writer.close()
