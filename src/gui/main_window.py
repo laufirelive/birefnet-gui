@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -29,11 +30,16 @@ from src.core.config import (
     VIDEO_EXTENSIONS,
 )
 from src.core.inference import detect_device
+from src.core.queue_manager import QueueManager
+from src.core.queue_task import QueueTask
 from src.core.video import get_video_info
 from src.worker.matting_worker import MattingWorker
 
 # Path to bundled models directory (relative to project root)
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models")
+
+# Path to queue persistence file
+BRM_PATH = os.path.join(os.path.expanduser("~"), ".birefnet-gui", "queue.brm")
 
 # Display names for output formats
 FORMAT_LABELS = {
@@ -81,6 +87,9 @@ class MainWindow(QMainWindow):
         self._input_type = None
         self._current_phase = None
 
+        self._queue_manager = QueueManager(brm_path=BRM_PATH)
+        self._queue_manager.load()
+
         self._init_ui()
         self.setAcceptDrops(True)
         self._set_state("initial")
@@ -88,7 +97,17 @@ class MainWindow(QMainWindow):
     def _init_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        main_layout = QHBoxLayout(central)
+        outer_layout = QVBoxLayout(central)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+
+        self._tabs = QTabWidget()
+        outer_layout.addWidget(self._tabs)
+
+        # --- Tab 1: Single Task ---
+        tab1 = QWidget()
+        self._tabs.addTab(tab1, "单任务")
+
+        main_layout = QHBoxLayout(tab1)
         main_layout.setSpacing(16)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -163,6 +182,10 @@ class MainWindow(QMainWindow):
         self._cancel_btn = QPushButton("取消")
         self._cancel_btn.clicked.connect(self._on_cancel)
         btn_row.addWidget(self._cancel_btn)
+
+        self._enqueue_btn = QPushButton("加入队列")
+        self._enqueue_btn.clicked.connect(self._on_enqueue)
+        btn_row.addWidget(self._enqueue_btn)
         btn_row.addStretch()
         left_panel.addLayout(btn_row)
 
@@ -213,6 +236,13 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(left_panel, stretch=2)
         main_layout.addLayout(right_panel, stretch=1)
 
+        # --- Tab 2: Queue (placeholder, replaced by QueueTab in Task 7) ---
+        self._queue_placeholder = QWidget()
+        placeholder_layout = QVBoxLayout(self._queue_placeholder)
+        placeholder_layout.addWidget(QLabel("队列功能即将上线..."))
+        placeholder_layout.addStretch()
+        self._tabs.addTab(self._queue_placeholder, self._get_queue_tab_title())
+
     def _populate_model_combo(self):
         """Populate model dropdown. Only show downloaded models as enabled."""
         models_dir = os.path.abspath(MODELS_DIR)
@@ -252,6 +282,7 @@ class MainWindow(QMainWindow):
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
+            self._enqueue_btn.setEnabled(False)
             self._select_btn.setEnabled(True)
             self._progress_bar.setValue(0)
             self._status_label.setText("")
@@ -259,23 +290,27 @@ class MainWindow(QMainWindow):
             self._start_btn.setEnabled(True)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
+            self._enqueue_btn.setEnabled(True)
             self._select_btn.setEnabled(True)
         elif state == "processing":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(True)
             self._pause_btn.setText("暂停")
             self._cancel_btn.setEnabled(True)
+            self._enqueue_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
         elif state == "paused":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(True)
             self._pause_btn.setText("继续")
             self._cancel_btn.setEnabled(True)
+            self._enqueue_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
         elif state == "finished":
             self._start_btn.setEnabled(True)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
+            self._enqueue_btn.setEnabled(True)
             self._select_btn.setEnabled(True)
 
     def _on_select_video(self):
@@ -461,7 +496,6 @@ class MainWindow(QMainWindow):
             input_type=self._input_type,
         )
         self._worker.progress.connect(self._on_progress)
-        self._worker.speed.connect(self._on_speed)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
         self._worker.start()
@@ -527,3 +561,46 @@ class MainWindow(QMainWindow):
         if message != "Processing cancelled":
             QMessageBox.critical(self, "错误", f"处理出错:\n{message}")
             self._status_label.setText(f"错误: {message}")
+
+    def _get_queue_tab_title(self) -> str:
+        count = len(self._queue_manager.tasks)
+        if count > 0:
+            return f"批量队列 ({count})"
+        return "批量队列"
+
+    def _update_queue_tab_title(self):
+        self._tabs.setTabText(1, self._get_queue_tab_title())
+
+    def _on_enqueue(self):
+        if not self._input_path or not self._input_type:
+            QMessageBox.warning(self, "提示", "请先选择输入文件")
+            return
+
+        config = self._get_config()
+        task = QueueTask.create(
+            input_path=self._input_path,
+            input_type=self._input_type,
+            config=config,
+            output_dir=self._output_dir,
+        )
+        self._queue_manager.add_task(task)
+        self._queue_manager.save()
+        self._update_queue_tab_title()
+
+        # Clear input for next add
+        self._input_path = None
+        self._input_type = None
+        self._input_edit.setText("")
+        self._info_label.setText("")
+        self._output_dir = None
+        self._output_edit.setText("")
+        self._set_state("initial")
+
+        self.statusBar().showMessage("已加入队列", 3000)
+
+    def closeEvent(self, event):
+        self._queue_manager.save()
+        if self._worker and self._worker.isRunning():
+            self._worker.cancel()
+            self._worker.wait()
+        event.accept()
