@@ -113,6 +113,15 @@ class ImagePipeline:
                         raise InterruptedError("Processing cancelled by user")
                     time.sleep(0.1)
 
+            base_name = os.path.splitext(filename)[0]
+            out_file = os.path.join(out_path, f"{base_name}.png")
+
+            # Skip already-processed images (for resume support)
+            if os.path.exists(out_file):
+                if progress_callback:
+                    progress_callback(idx, total)
+                continue
+
             image_path = os.path.join(folder_path, filename)
             frame = cv2.imread(image_path)
             if frame is None:
@@ -120,9 +129,6 @@ class ImagePipeline:
 
             alpha = predict(self._model, frame, self._device)
             composed = compose_frame(frame, alpha, self._config.background_mode)
-
-            base_name = os.path.splitext(filename)[0]
-            out_file = os.path.join(out_path, f"{base_name}.png")
             self._save_png(composed, out_file)
 
             if progress_callback:

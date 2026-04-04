@@ -261,7 +261,9 @@ class QueueTab(QWidget):
         if task.input_type == InputType.VIDEO and task.phase == ProcessingPhase.INFERENCE:
             start_frame = self._cache.get_cached_count(task.id)
 
-        output_path = self._build_output_path(task)
+        # Reuse stored output_path for resume, build new one for fresh tasks
+        output_path = task.output_path or self._build_output_path(task)
+        task.output_path = output_path
         models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models"))
 
         self._current_worker = MattingWorker(

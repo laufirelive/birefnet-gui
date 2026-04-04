@@ -33,6 +33,7 @@ class QueueTask:
     input_type: InputType
     config: ProcessingConfig
     output_dir: str | None
+    output_path: str | None  # Resolved output path (stable across resume)
     status: TaskStatus
     progress: int
     total: int
@@ -54,6 +55,7 @@ class QueueTask:
             input_type=input_type,
             config=config,
             output_dir=output_dir,
+            output_path=None,
             status=TaskStatus.PENDING,
             progress=0,
             total=0,
@@ -73,6 +75,7 @@ class QueueTask:
                 "background_mode": self.config.background_mode.value,
             },
             "output_dir": self.output_dir,
+            "output_path": self.output_path,
             "status": self.status.value,
             "progress": self.progress,
             "total": self.total,
@@ -94,6 +97,7 @@ class QueueTask:
             input_type=InputType(d["input_type"]),
             config=config,
             output_dir=d.get("output_dir"),
+            output_path=d.get("output_path"),
             status=TaskStatus(d["status"]),
             progress=d.get("progress", 0),
             total=d.get("total", 0),
