@@ -21,6 +21,7 @@ class FFmpegWriter:
         pix_fmt: str,
         input_pix_fmt: str = "rgb24",
         extra_args: list[str] | None = None,
+        audio_source: str | None = None,
     ):
         self._width = width
         self._height = height
@@ -33,11 +34,18 @@ class FFmpegWriter:
             "-s", f"{width}x{height}",
             "-r", str(fps),
             "-i", "-",
-            "-c:v", codec,
-            "-pix_fmt", pix_fmt,
         ]
+        if audio_source:
+            cmd.extend(["-i", audio_source])
+
+        cmd.extend(["-c:v", codec, "-pix_fmt", pix_fmt])
+
         if extra_args:
             cmd.extend(extra_args)
+
+        if audio_source:
+            cmd.extend(["-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
+
         cmd.append(output_path)
 
         self._process = subprocess.Popen(
@@ -111,6 +119,7 @@ def create_writer(
     width: int,
     height: int,
     fps: float,
+    audio_source: str | None = None,
 ):
     """Factory: return the appropriate writer based on config."""
     fmt = config.output_format
@@ -121,7 +130,7 @@ def create_writer(
         width = width * 2
 
     if fmt == OutputFormat.MOV_PRORES:
-        return ProResWriter(output_path, width, height, fps)
+        return ProResWriter(output_path, width, height, fps, audio_source=audio_source)
 
     if fmt == OutputFormat.WEBM_VP9:
         if is_alpha:
@@ -131,12 +140,14 @@ def create_writer(
                 pix_fmt="yuva420p",
                 input_pix_fmt="rgba",
                 extra_args=["-auto-alt-ref", "0"],
+                audio_source=audio_source,
             )
         return FFmpegWriter(
             output_path, width, height, fps,
             codec="libvpx-vp9",
             pix_fmt="yuv420p",
             extra_args=["-auto-alt-ref", "0"],
+            audio_source=audio_source,
         )
 
     if fmt == OutputFormat.MP4_H264:
@@ -144,6 +155,7 @@ def create_writer(
             output_path, width, height, fps,
             codec="libx264",
             pix_fmt="yuv420p",
+            audio_source=audio_source,
         )
 
     if fmt == OutputFormat.MP4_H265:
@@ -152,6 +164,7 @@ def create_writer(
             codec="libx265",
             pix_fmt="yuv420p",
             extra_args=["-tag:v", "hvc1"],
+            audio_source=audio_source,
         )
 
     if fmt == OutputFormat.MP4_AV1:
@@ -160,6 +173,7 @@ def create_writer(
             codec="libaom-av1",
             pix_fmt="yuv420p",
             extra_args=["-cpu-used", "8", "-row-mt", "1"],
+            audio_source=audio_source,
         )
 
     if fmt in (OutputFormat.PNG_SEQUENCE, OutputFormat.TIFF_SEQUENCE):

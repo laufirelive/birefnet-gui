@@ -5,7 +5,9 @@ import subprocess
 import numpy as np
 import pytest
 
+from src.core.config import BackgroundMode, OutputFormat, ProcessingConfig
 from src.core.video import ProResWriter
+from src.core.writer import FFmpegWriter, create_writer
 
 
 def _has_audio_stream(filepath: str) -> bool:
@@ -67,3 +69,73 @@ class TestProResWriterAudio:
         writer.close()
 
         assert os.path.exists(output_path)
+
+
+class TestFFmpegWriterAudio:
+    def test_h264_with_audio_source(self, test_video_with_audio_path, temp_output_dir):
+        output_path = os.path.join(temp_output_dir, "with_audio.mp4")
+        writer = FFmpegWriter(
+            output_path, width=64, height=64, fps=30.0,
+            codec="libx264", pix_fmt="yuv420p",
+            audio_source=test_video_with_audio_path,
+        )
+        for _ in range(5):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+
+        assert os.path.exists(output_path)
+        assert _has_audio_stream(output_path)
+
+    def test_h264_without_audio_source(self, temp_output_dir):
+        output_path = os.path.join(temp_output_dir, "no_audio.mp4")
+        writer = FFmpegWriter(
+            output_path, width=64, height=64, fps=30.0,
+            codec="libx264", pix_fmt="yuv420p",
+        )
+        for _ in range(5):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+
+        assert os.path.exists(output_path)
+        assert not _has_audio_stream(output_path)
+
+
+class TestCreateWriterAudio:
+    def test_create_writer_passes_audio_source(
+        self, test_video_with_audio_path, temp_output_dir
+    ):
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+        )
+        output_path = os.path.join(temp_output_dir, "out.mp4")
+        writer = create_writer(
+            config, output_path, width=64, height=64, fps=30.0,
+            audio_source=test_video_with_audio_path,
+        )
+        with writer:
+            for _ in range(5):
+                frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+                writer.write_frame(frame)
+
+        assert _has_audio_stream(output_path)
+
+    def test_image_sequence_ignores_audio_source(
+        self, test_video_with_audio_path, temp_output_dir
+    ):
+        config = ProcessingConfig(
+            output_format=OutputFormat.PNG_SEQUENCE,
+            background_mode=BackgroundMode.TRANSPARENT,
+        )
+        output_path = os.path.join(temp_output_dir, "seq")
+        writer = create_writer(
+            config, output_path, width=64, height=64, fps=30.0,
+            audio_source=test_video_with_audio_path,
+        )
+        with writer:
+            frame = np.full((64, 64, 4), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+
+        assert os.path.isdir(output_path)
