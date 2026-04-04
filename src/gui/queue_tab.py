@@ -428,7 +428,13 @@ class QueueTab(QWidget):
                 self._refresh_table()
 
     def _on_cancel_current(self):
-        if self._current_worker:
+        if not self._current_worker:
+            return
+        reply = QMessageBox.question(
+            self, "确认", "确定取消当前任务吗？已完成的推理缓存会保留。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
             self._current_worker.cancel()
             self._current_worker.wait()
 
