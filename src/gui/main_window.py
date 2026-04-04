@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self._output_dir = None
         self._start_time = None
         self._input_type = None
+        self._current_phase = None
 
         self._init_ui()
         self.setAcceptDrops(True)
@@ -484,7 +485,11 @@ class MainWindow(QMainWindow):
         self._progress_bar.setValue(0)
         self._status_label.setText("已取消")
 
-    def _on_progress(self, current: int, total: int):
+    def _on_progress(self, current: int, total: int, phase: str):
+        if phase != self._current_phase:
+            self._current_phase = phase
+            self._start_time = time.time()
+
         percent = int(current / total * 100) if total > 0 else 0
         self._progress_bar.setValue(percent)
 
@@ -494,12 +499,10 @@ class MainWindow(QMainWindow):
             remaining = (total - current) / fps if fps > 0 else 0
             rem_min = int(remaining // 60)
             rem_sec = int(remaining % 60)
+            phase_label = {"inference": "推理中", "encoding": "编码中", "processing": "处理中"}.get(phase, phase)
             self._status_label.setText(
-                f"帧: {current}/{total} | 速度: {fps:.1f} FPS | 剩余: {rem_min:02d}:{rem_sec:02d}"
+                f"{phase_label}: {current}/{total} | {fps:.1f} FPS | 剩余: {rem_min:02d}:{rem_sec:02d}"
             )
-
-    def _on_speed(self, fps: float):
-        pass
 
     def _on_finished(self, output_path: str):
         self._set_state("finished")
