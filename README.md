@@ -43,7 +43,13 @@ winget install ffmpeg
 brew install ffmpeg
 ```
 
-### 3. 运行
+### 3. 启用 GPU 加速（Windows，可选）
+
+下载版默认使用 CPU 推理。如果你有 NVIDIA 显卡，双击 `enable_gpu.bat` 即可自动下载 CUDA 版 PyTorch（约 2.5GB），安装后重启程序即可使用 GPU 加速。
+
+macOS 用户无需操作，Apple Silicon 通过 MPS 自动加速。
+
+### 4. 运行
 
 双击 `BiRefNet-GUI`（macOS）或 `BiRefNet-GUI.exe`（Windows），首次启动会自动跳转到模型管理页面，下载至少一个模型即可开始使用。
 

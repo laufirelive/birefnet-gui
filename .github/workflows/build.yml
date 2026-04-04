@@ -17,7 +17,7 @@ jobs:
         include:
           - os: windows-latest
             artifact: BiRefNet-GUI-Windows
-            torch-extra: --index-url https://download.pytorch.org/whl/cu121
+            torch-extra: --index-url https://download.pytorch.org/whl/cpu
           - os: macos-latest
             artifact: BiRefNet-GUI-macOS-ARM
             torch-extra: ""
@@ -42,10 +42,6 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Remove triton (not needed for inference, saves ~150MB)
-        shell: bash
-        run: pip uninstall -y triton 2>/dev/null || true
-
       - name: Build with PyInstaller
         run: |
           pyinstaller birefnet-gui.spec
@@ -53,6 +49,11 @@ jobs:
       - name: Create empty models directory
         shell: bash
         run: mkdir -p dist/BiRefNet-GUI/models
+
+      - name: Copy GPU enable script (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cp enable_gpu.bat dist/BiRefNet-GUI/
 
       - name: Create README.txt
         shell: bash
