@@ -159,23 +159,33 @@ class MattingPipeline:
         task_id: str,
         cache: MaskCacheManager,
         start_frame: int = 0,
+        start_phase: str = "inference",
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         pause_event: Optional[threading.Event] = None,
         cancel_event: Optional[threading.Event] = None,
     ) -> None:
-        """Convenience method: run infer_phase, optional temporal_fix_phase, then encode_phase."""
-        self.infer_phase(
-            input_path, task_id, cache, start_frame,
-            progress_callback, pause_event, cancel_event,
-        )
-        if self._config.temporal_fix:
+        """Convenience method: run infer_phase, optional temporal_fix_phase, then encode_phase.
+
+        *start_phase* can be ``"inference"``, ``"temporal_fix"`` or
+        ``"encoding"`` to skip already-completed phases on resume.
+        """
+        phase_order = ["inference", "temporal_fix", "encoding"]
+        start_idx = phase_order.index(start_phase) if start_phase in phase_order else 0
+
+        if start_idx <= 0:
+            self.infer_phase(
+                input_path, task_id, cache, start_frame,
+                progress_callback, pause_event, cancel_event,
+            )
+        if self._config.temporal_fix and start_idx <= 1:
             video_info = get_video_info(input_path)
             total_frames = video_info["frame_count"]
             self.temporal_fix_phase(
                 task_id, cache, total_frames,
                 progress_callback, cancel_event,
             )
-        self.encode_phase(
-            input_path, output_path, task_id, cache,
-            progress_callback, pause_event, cancel_event,
-        )
+        if start_idx <= 2:
+            self.encode_phase(
+                input_path, output_path, task_id, cache,
+                progress_callback, pause_event, cancel_event,
+            )

@@ -37,6 +37,7 @@ class MattingWorker(QThread):
         input_type: InputType = InputType.VIDEO,
         task_id: str | None = None,
         start_frame: int = 0,
+        start_phase: str = "inference",
         cleanup_cache: bool = True,
     ):
         super().__init__()
@@ -47,6 +48,7 @@ class MattingWorker(QThread):
         self._input_type = input_type
         self._task_id = task_id or uuid.uuid4().hex[:8]
         self._start_frame = start_frame
+        self._start_phase = start_phase
         self._cleanup_cache = cleanup_cache
 
         self._pause_event = threading.Event()
@@ -81,6 +83,7 @@ class MattingWorker(QThread):
                 task_id=self._task_id,
                 cache=cache,
                 start_frame=self._start_frame,
+                start_phase=self._start_phase,
                 progress_callback=self._on_progress,
                 pause_event=self._pause_event,
                 cancel_event=self._cancel_event,

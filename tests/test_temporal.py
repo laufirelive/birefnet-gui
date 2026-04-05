@@ -91,3 +91,29 @@ class TestDetectAndFixOutliers:
         cache.save_mask(task_id, 0, np.full((32, 32), 200, dtype=np.uint8))
         fixed = detect_and_fix_outliers(cache, task_id, total_frames=1)
         assert fixed == 0
+
+    def test_consecutive_outliers_fixed_by_window(self):
+        """Two adjacent bad frames should be caught with a wide enough window."""
+        tmpdir = tempfile.mkdtemp()
+        cache = MaskCacheManager(tmpdir)
+        task_id = "consecutive"
+        for i in range(40):
+            val = 0 if i in (19, 20) else 200
+            cache.save_mask(task_id, i, np.full((32, 32), val, dtype=np.uint8))
+        fixed = detect_and_fix_outliers(cache, task_id, total_frames=40, window_radius=10)
+        assert fixed == 2
+        for i in (19, 20):
+            repaired = cache.load_mask(task_id, i)
+            assert np.allclose(repaired, 200, atol=15)
+
+    def test_custom_window_radius(self):
+        """Explicit window_radius=5 catches outlier in a 20-frame video."""
+        tmpdir = tempfile.mkdtemp()
+        cache = MaskCacheManager(tmpdir)
+        task_id = "radius5"
+        for i in range(20):
+            cache.save_mask(task_id, i, np.full((32, 32), 200, dtype=np.uint8))
+        cache.save_mask(task_id, 10, np.full((32, 32), 0, dtype=np.uint8))
+        fixed = detect_and_fix_outliers(cache, task_id, total_frames=20, window_radius=5)
+        assert fixed == 1
+        assert np.allclose(cache.load_mask(task_id, 10), 200, atol=5)

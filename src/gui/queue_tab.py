@@ -282,8 +282,26 @@ class QueueTab(QWidget):
         self._set_queue_state("running")
 
         start_frame = 0
+        start_phase = "inference"
         if task.input_type == InputType.VIDEO:
-            start_frame = self._cache.get_cached_count(task.id)
+            cached = self._cache.get_cached_count(task.id)
+            video_info = None
+            try:
+                from src.core.video import get_video_info
+                video_info = get_video_info(task.input_path)
+            except Exception:
+                pass
+            total = video_info["frame_count"] if video_info else 0
+
+            if cached >= total > 0:
+                # All masks cached — skip inference entirely
+                if task.phase in (ProcessingPhase.TEMPORAL_FIX, ProcessingPhase.ENCODING):
+                    start_phase = task.phase.value
+                else:
+                    # Phase still says INFERENCE but all frames are cached
+                    start_phase = "temporal_fix"
+            else:
+                start_frame = cached
 
         # Reuse stored output_path for resume (image folders).
         # For video: if interrupted during encoding, the partial file is corrupt,
@@ -303,6 +321,7 @@ class QueueTab(QWidget):
             input_type=task.input_type,
             task_id=task.id,
             start_frame=start_frame,
+            start_phase=start_phase,
             cleanup_cache=False,
         )
         self._current_worker.progress.connect(
