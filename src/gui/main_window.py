@@ -38,6 +38,21 @@ from src.gui.settings_tab import SettingsTab
 from src.gui.notifier import Notifier
 from src.worker.matting_worker import MattingWorker
 
+
+def _format_duration(seconds: float) -> str:
+    """Format seconds into human-readable duration (e.g. 02:30, 1:02:30, 1天03:20:00)."""
+    s = int(seconds)
+    if s < 3600:
+        return f"{s // 60:02d}:{s % 60:02d}"
+    hours = s // 3600
+    mins = (s % 3600) // 60
+    secs = s % 60
+    if hours < 24:
+        return f"{hours}:{mins:02d}:{secs:02d}"
+    days = hours // 24
+    hours = hours % 24
+    return f"{days}天{hours:02d}:{mins:02d}:{secs:02d}"
+
 # Path to bundled models directory
 MODELS_DIR = get_models_dir()
 
@@ -489,8 +504,6 @@ class MainWindow(QMainWindow):
         if current > 0 and elapsed > 0:
             fps = current / elapsed
             remaining = (total - current) / fps if fps > 0 else 0
-            rem_min = int(remaining // 60)
-            rem_sec = int(remaining % 60)
             phase_label = {
                 "inference": "推理中",
                 "temporal_fix": "时序修复中",
@@ -498,7 +511,7 @@ class MainWindow(QMainWindow):
                 "processing": "处理中",
             }.get(phase, phase)
             self._status_label.setText(
-                f"{phase_label}: {current}/{total} | {fps:.1f} FPS | 剩余: {rem_min:02d}:{rem_sec:02d}"
+                f"{phase_label}: {current}/{total} | {fps:.1f} FPS | 剩余: {_format_duration(remaining)}"
             )
 
     def _on_finished(self, output_path: str):
