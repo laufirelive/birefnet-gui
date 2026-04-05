@@ -26,7 +26,8 @@ from src.core.cache import MaskCacheManager
 from src.core.config import FORMAT_EXTENSIONS, IMAGE_EXTENSIONS, MODELS, VIDEO_EXTENSIONS, InputType, ProcessingConfig
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import ProcessingPhase, QueueTask, TaskStatus
-from src.worker.matting_worker import CACHE_DIR, MattingWorker
+from src.core.data_dir import get_cache_dir
+from src.worker.matting_worker import MattingWorker
 
 
 class QueueTab(QWidget):
@@ -41,7 +42,7 @@ class QueueTab(QWidget):
         self._get_default_config = get_default_config_fn
         self._notifier = notifier
         self._current_worker: MattingWorker | None = None
-        self._cache = MaskCacheManager(CACHE_DIR)
+        self._cache = MaskCacheManager(get_cache_dir())
         self._start_time: float | None = None
         self._current_phase: str | None = None
         self._queue_state = "idle"
