@@ -21,6 +21,16 @@ class MattingPipeline:
         model_path = get_model_path(config.model_name, models_dir)
         self._model = load_model(model_path, self._device)
 
+    def release(self):
+        """Release model and free GPU memory."""
+        import gc
+        import torch
+        del self._model
+        self._model = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def infer_phase(
         self,
         input_path: str,

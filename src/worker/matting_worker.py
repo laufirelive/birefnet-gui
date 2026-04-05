@@ -73,30 +73,36 @@ class MattingWorker(QThread):
         from src.core.pipeline import MattingPipeline
         cache = MaskCacheManager(CACHE_DIR)
         pipeline = MattingPipeline(self._config, self._models_dir)
-        pipeline.process(
-            input_path=self._input_path,
-            output_path=self._output_path,
-            task_id=self._task_id,
-            cache=cache,
-            start_frame=self._start_frame,
-            progress_callback=self._on_progress,
-            pause_event=self._pause_event,
-            cancel_event=self._cancel_event,
-        )
+        try:
+            pipeline.process(
+                input_path=self._input_path,
+                output_path=self._output_path,
+                task_id=self._task_id,
+                cache=cache,
+                start_frame=self._start_frame,
+                progress_callback=self._on_progress,
+                pause_event=self._pause_event,
+                cancel_event=self._cancel_event,
+            )
+        finally:
+            pipeline.release()
         if self._cleanup_cache:
             cache.cleanup(self._task_id)
 
     def _run_image(self):
         from src.core.image_pipeline import ImagePipeline
         pipeline = ImagePipeline(self._config, self._models_dir)
-        result = pipeline.process(
-            input_path=self._input_path,
-            output_dir=self._output_path,
-            progress_callback=lambda c, t: self._on_progress(c, t, "processing"),
-            pause_event=self._pause_event,
-            cancel_event=self._cancel_event,
-        )
-        self._output_path = result
+        try:
+            result = pipeline.process(
+                input_path=self._input_path,
+                output_dir=self._output_path,
+                progress_callback=lambda c, t: self._on_progress(c, t, "processing"),
+                pause_event=self._pause_event,
+                cancel_event=self._cancel_event,
+            )
+            self._output_path = result
+        finally:
+            pipeline.release()
 
     def _on_progress(self, current: int, total: int, phase: str):
         self.progress.emit(current, total, phase)
