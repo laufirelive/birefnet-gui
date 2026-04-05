@@ -33,6 +33,7 @@ from src.core.video import get_video_info
 from src.gui.model_tab import ModelTab
 from src.gui.queue_tab import QueueTab
 from src.gui.settings_panel import SettingsPanel
+from src.gui.notifier import Notifier
 from src.worker.matting_worker import MattingWorker
 
 # Path to bundled models directory
@@ -61,6 +62,7 @@ class MainWindow(QMainWindow):
         self._init_ui()
         self.setAcceptDrops(True)
         self._set_state("initial")
+        self._notifier = Notifier()
 
         # First launch: if no models installed, switch to model tab
         if not self._model_tab.has_any_model():
@@ -148,7 +150,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self._settings_panel, stretch=1)
 
         # --- Tab 2: Queue ---
-        self._queue_tab = QueueTab(self._queue_manager, self._get_config)
+        self._queue_tab = QueueTab(self._queue_manager, self._get_config, notifier=self._notifier)
         self._queue_tab.queue_running_changed.connect(self._on_queue_running_changed)
         self._queue_tab.task_count_changed.connect(
             lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
@@ -497,6 +499,8 @@ class MainWindow(QMainWindow):
         seconds = int(elapsed % 60)
         self._status_label.setText(f"处理完成! 耗时: {minutes:02d}:{seconds:02d}")
 
+        self._notifier.notify("处理完成", output_path)
+
         if self._input_type == InputType.VIDEO:
             msg = f"视频处理完成!\n\n输出文件:\n{output_path}"
         elif self._input_type == InputType.IMAGE:
@@ -510,6 +514,7 @@ class MainWindow(QMainWindow):
         self._set_state("ready")
         self._progress_bar.setValue(0)
         if message != "Processing cancelled":
+            self._notifier.notify_error("处理出错", message)
             QMessageBox.critical(self, "错误", f"处理出错:\n{message}")
             self._status_label.setText(f"错误: {message}")
 
