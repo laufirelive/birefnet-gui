@@ -35,10 +35,11 @@ class QueueTab(QWidget):
     queue_running_changed = pyqtSignal(bool)
     task_count_changed = pyqtSignal(int)
 
-    def __init__(self, queue_manager: QueueManager, get_default_config_fn, parent=None):
+    def __init__(self, queue_manager: QueueManager, get_default_config_fn, notifier=None, parent=None):
         super().__init__(parent)
         self._qm = queue_manager
         self._get_default_config = get_default_config_fn
+        self._notifier = notifier
         self._current_worker: MattingWorker | None = None
         self._cache = MaskCacheManager(CACHE_DIR)
         self._start_time: float | None = None
@@ -430,6 +431,9 @@ class QueueTab(QWidget):
         self._status_label.setText("")
         self._progress_bar.setValue(100)
         QApplication.beep()
+        completed_count = sum(1 for t in self._qm.tasks if t.status == TaskStatus.COMPLETED)
+        if self._notifier:
+            self._notifier.notify("队列完成", f"{completed_count} 个任务已完成")
 
     def _on_pause(self):
         if self._queue_state == "running" and self._current_worker:
