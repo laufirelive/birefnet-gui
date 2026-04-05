@@ -34,6 +34,7 @@ from src.core.video import get_video_info
 from src.gui.model_tab import ModelTab
 from src.gui.queue_tab import QueueTab
 from src.gui.settings_panel import SettingsPanel
+from src.gui.settings_tab import SettingsTab
 from src.gui.notifier import Notifier
 from src.worker.matting_worker import MattingWorker
 
@@ -162,6 +163,14 @@ class MainWindow(QMainWindow):
         self._model_tab = ModelTab(MODELS_DIR)
         self._model_tab.models_changed.connect(self._on_models_changed)
         self._tabs.addTab(self._model_tab, "模型管理")
+
+        # --- Tab 4: Settings ---
+        self._settings_tab = SettingsTab()
+        self._settings_tab.download_source_changed.connect(self._on_download_source_changed)
+        self._tabs.addTab(self._settings_tab, "设置")
+
+        # Wire endpoint getter now that settings_tab exists
+        self._model_tab._get_endpoint = self._settings_tab.get_download_endpoint
 
         # Connect "管理模型..." button
         self._settings_panel._manage_models_btn.clicked.connect(
@@ -559,6 +568,10 @@ class MainWindow(QMainWindow):
     def _on_models_changed(self):
         """Refresh model combo when models are installed/deleted."""
         self._settings_panel.refresh_models()
+
+    def _on_download_source_changed(self):
+        """Update model tab's download source display."""
+        self._model_tab.update_source_label(self._settings_tab.get_download_source_display())
 
     def _on_queue_running_changed(self, running: bool):
         """Disable single-task start when queue is running, but allow file selection + enqueue."""
