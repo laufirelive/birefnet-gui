@@ -172,10 +172,12 @@ def create_writer(
 
     if fmt == OutputFormat.MOV_PRORES:
         profile = _resolve_prores_profile(config)
-        # ProRes 4444 (profile 4+) required for alpha; profiles 0-3 are 422 and drop alpha silently
         if is_alpha and profile < 4:
             profile = 4
-        return ProResWriter(output_path, width, height, fps, audio_source=audio_source, profile=profile)
+        return ProResWriter(
+            output_path, width, height, fps,
+            audio_source=audio_source, profile=profile, has_alpha=is_alpha,
+        )
 
     bitrate_kbps = _resolve_bitrate_kbps(config, source_bitrate_mbps)
     preset = config.encoding_preset.value

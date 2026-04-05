@@ -175,7 +175,7 @@ class TestProResWriterProfile:
     def test_writes_prores_with_profile(self, temp_output_dir):
         from src.core.video import ProResWriter
         output_path = os.path.join(temp_output_dir, "test_profile.mov")
-        writer = ProResWriter(output_path, 64, 64, 30.0, profile=0)
+        writer = ProResWriter(output_path, 64, 64, 30.0, profile=4, has_alpha=True)
         for _ in range(5):
             frame = np.full((64, 64, 4), 128, dtype=np.uint8)
             writer.write_frame(frame)

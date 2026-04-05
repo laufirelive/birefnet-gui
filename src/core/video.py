@@ -102,7 +102,10 @@ def _has_encoder(name: str) -> bool:
 
 
 class ProResWriter:
-    """Writes RGBA frames to a MOV file using ProRes 4444 via FFmpeg."""
+    """Writes frames to a MOV file using ProRes via FFmpeg.
+
+    Supports both RGBA (4-channel, transparent) and RGB (3-channel) input.
+    """
 
     def __init__(
         self,
@@ -112,23 +115,34 @@ class ProResWriter:
         fps: float,
         audio_source: str | None = None,
         profile: int = 3,
+        has_alpha: bool = False,
     ):
         self._output_path = output_path
         self._width = width
         self._height = height
+        self._channels = 4 if has_alpha else 3
 
-        # Determine best available ProRes encoder
-        if _has_encoder("prores_ks"):
+        # Determine best available ProRes encoder and pixel formats
+        if has_alpha and _has_encoder("prores_ks"):
             encoder = "prores_ks"
-            pix_fmt = "yuva444p10le" if profile >= 4 else "yuv422p10le"
+            input_pix_fmt = "rgba"
+            output_pix_fmt = "yuva444p10le"
+        elif _has_encoder("prores_ks"):
+            encoder = "prores_ks"
+            input_pix_fmt = "rgb24"
+            output_pix_fmt = "yuv422p10le"
+            if profile >= 4:
+                profile = 3
         elif _has_encoder("prores_aw"):
             encoder = "prores_aw"
-            pix_fmt = "yuv422p10le"
+            input_pix_fmt = "rgb24"
+            output_pix_fmt = "yuv422p10le"
             if profile >= 4:
-                profile = 3  # prores_aw has no 4444 support, use HQ
+                profile = 3
         else:
             encoder = "prores"
-            pix_fmt = "yuv422p10le"
+            input_pix_fmt = "rgb24"
+            output_pix_fmt = "yuv422p10le"
             if profile >= 4:
                 profile = 3
 
@@ -136,7 +150,7 @@ class ProResWriter:
             "ffmpeg",
             "-y",
             "-f", "rawvideo",
-            "-pix_fmt", "rgba",
+            "-pix_fmt", input_pix_fmt,
             "-s", f"{width}x{height}",
             "-r", str(fps),
             "-i", "-",
@@ -147,7 +161,7 @@ class ProResWriter:
         cmd.extend([
             "-c:v", encoder,
             "-profile:v", str(profile),
-            "-pix_fmt", pix_fmt,
+            "-pix_fmt", output_pix_fmt,
             "-vendor", "apl0",
         ])
 
@@ -183,13 +197,14 @@ class ProResWriter:
         self.close()
         return False
 
-    def write_frame(self, rgba_frame: np.ndarray):
-        """Write one RGBA uint8 frame. Shape must be (height, width, 4)."""
-        if rgba_frame.shape != (self._height, self._width, 4):
+    def write_frame(self, frame: np.ndarray):
+        """Write one frame. Shape must be (height, width, channels)."""
+        expected = (self._height, self._width, self._channels)
+        if frame.shape != expected:
             raise ValueError(
-                f"Expected frame shape ({self._height}, {self._width}, 4), got {rgba_frame.shape}"
+                f"Expected frame shape {expected}, got {frame.shape}"
             )
-        self._process.stdin.write(rgba_frame.tobytes())
+        self._process.stdin.write(frame.tobytes())
 
     def close(self):
         """Flush and close the FFmpeg process."""

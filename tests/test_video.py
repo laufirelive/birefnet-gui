@@ -40,7 +40,7 @@ class TestFrameReader:
 class TestProResWriter:
     def test_writes_mov_file(self, temp_output_dir):
         output_path = os.path.join(temp_output_dir, "output.mov")
-        writer = ProResWriter(output_path, width=64, height=64, fps=30.0)
+        writer = ProResWriter(output_path, width=64, height=64, fps=30.0, has_alpha=True)
 
         for i in range(5):
             rgba = np.full((64, 64, 4), fill_value=128, dtype=np.uint8)

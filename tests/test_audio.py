@@ -30,7 +30,7 @@ def _has_audio_stream(filepath: str) -> bool:
 class TestProResWriterAudio:
     def test_no_audio_source_produces_silent_output(self, temp_output_dir):
         output_path = os.path.join(temp_output_dir, "no_audio.mov")
-        writer = ProResWriter(output_path, width=64, height=64, fps=30.0)
+        writer = ProResWriter(output_path, width=64, height=64, fps=30.0, has_alpha=True)
         for _ in range(5):
             rgba = np.full((64, 64, 4), 128, dtype=np.uint8)
             writer.write_frame(rgba)
@@ -45,7 +45,7 @@ class TestProResWriterAudio:
         output_path = os.path.join(temp_output_dir, "with_audio.mov")
         writer = ProResWriter(
             output_path, width=64, height=64, fps=30.0,
-            audio_source=test_video_with_audio_path,
+            audio_source=test_video_with_audio_path, has_alpha=True,
         )
         for _ in range(5):
             rgba = np.full((64, 64, 4), 128, dtype=np.uint8)
@@ -61,7 +61,7 @@ class TestProResWriterAudio:
         output_path = os.path.join(temp_output_dir, "no_audio_src.mov")
         writer = ProResWriter(
             output_path, width=64, height=64, fps=30.0,
-            audio_source=test_video_path,
+            audio_source=test_video_path, has_alpha=True,
         )
         for _ in range(5):
             rgba = np.full((64, 64, 4), 128, dtype=np.uint8)
