@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 
 import numpy as np
 from PIL import Image
@@ -62,6 +63,19 @@ class FFmpegWriter:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
+        # Drain stderr in background to prevent Windows pipe deadlock
+        self._stderr_chunks: list[bytes] = []
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, daemon=True,
+        )
+        self._stderr_thread.start()
+
+    def _drain_stderr(self):
+        try:
+            for chunk in iter(lambda: self._process.stderr.read(4096), b""):
+                self._stderr_chunks.append(chunk)
+        except (OSError, ValueError):
+            pass
 
     def __enter__(self):
         return self
@@ -83,9 +97,10 @@ class FFmpegWriter:
             except BrokenPipeError:
                 pass
             self._process.stdin.close()
-        _, stderr_data = self._process.communicate()
+        self._process.wait()
+        self._stderr_thread.join(timeout=5)
         if self._process.returncode != 0:
-            stderr = stderr_data.decode() if stderr_data else "unknown error"
+            stderr = b"".join(self._stderr_chunks).decode(errors="replace")
             raise RuntimeError(f"FFmpeg failed (code {self._process.returncode}): {stderr}")
 
 

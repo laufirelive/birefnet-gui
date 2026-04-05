@@ -1,5 +1,6 @@
 import os
 import subprocess
+import threading
 
 import cv2
 import numpy as np
@@ -88,6 +89,18 @@ class FrameReader:
             cap.release()
 
 
+def _has_encoder(name: str) -> bool:
+    """Check if FFmpeg has a specific encoder available."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return name in result.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 class ProResWriter:
     """Writes RGBA frames to a MOV file using ProRes 4444 via FFmpeg."""
 
@@ -104,6 +117,21 @@ class ProResWriter:
         self._width = width
         self._height = height
 
+        # Determine best available ProRes encoder
+        if _has_encoder("prores_ks"):
+            encoder = "prores_ks"
+            pix_fmt = "yuva444p10le" if profile >= 4 else "yuv422p10le"
+        elif _has_encoder("prores_aw"):
+            encoder = "prores_aw"
+            pix_fmt = "yuv422p10le"
+            if profile >= 4:
+                profile = 3  # prores_aw has no 4444 support, use HQ
+        else:
+            encoder = "prores"
+            pix_fmt = "yuv422p10le"
+            if profile >= 4:
+                profile = 3
+
         cmd = [
             "ffmpeg",
             "-y",
@@ -117,9 +145,9 @@ class ProResWriter:
             cmd.extend(["-i", audio_source])
 
         cmd.extend([
-            "-c:v", "prores_ks",
+            "-c:v", encoder,
             "-profile:v", str(profile),
-            "-pix_fmt", "yuva444p10le",
+            "-pix_fmt", pix_fmt,
             "-vendor", "apl0",
         ])
 
@@ -134,6 +162,19 @@ class ProResWriter:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
+        # Drain stderr in background to prevent Windows pipe deadlock
+        self._stderr_chunks: list[bytes] = []
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, daemon=True,
+        )
+        self._stderr_thread.start()
+
+    def _drain_stderr(self):
+        try:
+            for chunk in iter(lambda: self._process.stderr.read(4096), b""):
+                self._stderr_chunks.append(chunk)
+        except (OSError, ValueError):
+            pass
 
     def __enter__(self):
         return self
@@ -158,8 +199,8 @@ class ProResWriter:
             except BrokenPipeError:
                 pass
             self._process.stdin.close()
-        # Use communicate() to properly drain stderr and wait for process
-        _, stderr_data = self._process.communicate()
+        self._process.wait()
+        self._stderr_thread.join(timeout=5)
         if self._process.returncode != 0:
-            stderr = stderr_data.decode() if stderr_data else "unknown error"
+            stderr = b"".join(self._stderr_chunks).decode(errors="replace")
             raise RuntimeError(f"FFmpeg failed (code {self._process.returncode}): {stderr}")
