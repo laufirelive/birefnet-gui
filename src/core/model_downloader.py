@@ -79,6 +79,7 @@ class ModelDownloader:
     def _do_download(
         self, repo_id: str, local_path: str, endpoint: str, tqdm_class=None,
     ) -> str:
+        # HF_ENDPOINT is process-global; only one download may run at a time.
         old_endpoint = os.environ.get("HF_ENDPOINT")
         try:
             os.environ["HF_ENDPOINT"] = endpoint

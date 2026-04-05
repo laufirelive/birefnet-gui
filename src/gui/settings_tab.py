@@ -21,12 +21,12 @@ from PyQt6.QtWidgets import (
 from src.core.cache import MaskCacheManager, format_size
 from src.core.data_dir import (
     get_cache_dir,
+    get_settings_path,
     resolve_data_dir,
     save_config,
 )
 from src.core.paths import get_app_root
 from src.core.settings import AppSettings, load_settings, save_settings
-from src.core.data_dir import get_settings_path
 from src.core.model_downloader import ENDPOINTS
 
 
@@ -209,6 +209,8 @@ class SettingsTab(QWidget):
                 QMessageBox.warning(self, "提示", "请输入或选择自定义路径")
                 return
 
+        old_dir = resolve_data_dir()
+
         # Save config.json to the new data_dir
         save_config(new_dir)
 
@@ -222,7 +224,7 @@ class SettingsTab(QWidget):
             f"数据目录已设为:\n{new_dir}\n\n请重启应用使设置生效。\n旧数据不会自动迁移，如需保留请手动复制。",
         )
         self._dir_apply_btn.setEnabled(False)
-        self._current_dir_label.setText(f"当前生效: {resolve_data_dir()} (重启后: {new_dir})")
+        self._current_dir_label.setText(f"当前生效: {old_dir} (重启后: {new_dir})")
 
     # --- Cache ---
     def _refresh_cache_size(self):

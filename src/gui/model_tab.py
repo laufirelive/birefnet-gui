@@ -267,6 +267,9 @@ class ModelTab(QWidget):
 
     def _on_cancel_download(self):
         if self._download_worker and self._download_worker.isRunning():
+            # terminate() is unsafe but snapshot_download has no cancellation API.
+            # Only one download runs at a time, so the risk is limited to a leaked
+            # partial file (which resume_download=True handles on next attempt).
             self._download_worker.terminate()
             self._download_worker.wait()
             self._download_worker = None
