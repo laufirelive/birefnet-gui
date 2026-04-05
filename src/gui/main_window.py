@@ -60,11 +60,11 @@ class MainWindow(QMainWindow):
 
         self._queue_manager = QueueManager(brm_path=BRM_PATH)
         self._queue_manager.load()
+        self._notifier = Notifier()
 
         self._init_ui()
         self.setAcceptDrops(True)
         self._set_state("initial")
-        self._notifier = Notifier()
 
         # First launch: if no models installed, switch to model tab
         if not self._model_tab.has_any_model():
