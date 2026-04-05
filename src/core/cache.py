@@ -6,6 +6,14 @@ import cv2
 import numpy as np
 
 
+def format_size(size_bytes: int) -> str:
+    """Format byte count as human-readable string."""
+    if size_bytes >= 1_073_741_824:  # 1 GB
+        return f"{size_bytes / 1_073_741_824:.1f} GB"
+    mb = size_bytes // 1_048_576
+    return f"{mb} MB"
+
+
 class MaskCacheManager:
     """Manages alpha mask cache on disk for breakpoint resume."""
 
@@ -54,6 +62,16 @@ class MaskCacheManager:
         task_dir = os.path.join(self._cache_dir, task_id)
         if os.path.isdir(task_dir):
             shutil.rmtree(task_dir)
+
+    def get_total_size(self) -> int:
+        """Return total size in bytes of all cached data."""
+        if not os.path.isdir(self._cache_dir):
+            return 0
+        total = 0
+        for dirpath, _dirnames, filenames in os.walk(self._cache_dir):
+            for f in filenames:
+                total += os.path.getsize(os.path.join(dirpath, f))
+        return total
 
     def cleanup_all(self) -> None:
         if not os.path.isdir(self._cache_dir):
