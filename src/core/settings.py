@@ -1,0 +1,42 @@
+"""Application settings: load/save from settings.json."""
+
+import json
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class AppSettings:
+    download_source: str = "hf-mirror"  # "hf-mirror", "huggingface", "custom"
+    custom_endpoint: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "download_source": self.download_source,
+            "custom_endpoint": self.custom_endpoint,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "AppSettings":
+        return cls(
+            download_source=data.get("download_source", "hf-mirror"),
+            custom_endpoint=data.get("custom_endpoint", ""),
+        )
+
+
+def load_settings(path: str) -> AppSettings:
+    """Load settings from JSON file. Returns defaults on any error."""
+    try:
+        with open(path) as f:
+            return AppSettings.from_dict(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return AppSettings()
+
+
+def save_settings(settings: AppSettings, path: str) -> None:
+    """Save settings to JSON file."""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(settings.to_dict(), f, indent=2)
