@@ -28,6 +28,8 @@ def _make_tqdm_class(signal):
 
     class QtProgressTqdm(_tqdm_base):
         def __init__(self, *args, **kwargs):
+            # huggingface_hub passes extra kwargs (e.g. name=) that tqdm rejects
+            kwargs.pop("name", None)
             kwargs.setdefault("disable", False)
             super().__init__(*args, **kwargs)
 
