@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.core.data_dir import get_brm_path
 from src.core.paths import get_models_dir
 from src.core.config import (
     FORMAT_EXTENSIONS,
@@ -39,7 +40,7 @@ from src.worker.matting_worker import MattingWorker
 MODELS_DIR = get_models_dir()
 
 # Path to queue persistence file
-BRM_PATH = os.path.join(os.path.expanduser("~"), ".birefnet-gui", "queue.brm")
+BRM_PATH = get_brm_path()
 
 
 class MainWindow(QMainWindow):

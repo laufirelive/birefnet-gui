@@ -7,8 +7,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 from src.core.cache import MaskCacheManager
 from src.core.config import InputType, ProcessingConfig
+from src.core.data_dir import get_cache_dir
 
-CACHE_DIR = os.path.join(os.path.expanduser("~"), ".birefnet-gui", "cache")
+CACHE_DIR = get_cache_dir()
 
 
 class MattingWorker(QThread):
