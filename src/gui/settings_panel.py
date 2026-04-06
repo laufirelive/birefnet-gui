@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -109,7 +110,15 @@ class SettingsPanel(QWidget):
         self._update_vram_warning()
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setSpacing(12)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -227,6 +236,9 @@ class SettingsPanel(QWidget):
         layout.addWidget(self._vram_warning)
 
         layout.addStretch()
+
+        scroll.setWidget(container)
+        outer.addWidget(scroll)
 
     def _populate_model_combo(self):
         self._model_combo.clear()
