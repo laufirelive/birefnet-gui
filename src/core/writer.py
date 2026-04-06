@@ -70,6 +70,29 @@ class FFmpegWriter:
         )
         self._stderr_thread.start()
 
+    @classmethod
+    def from_cmd(
+        cls,
+        cmd: list[str],
+        width: int,
+        height: int,
+        channels: int = 3,
+        encoder_name: str | None = None,
+    ) -> "FFmpegWriter":
+        """Create an FFmpegWriter from a pre-built FFmpeg command."""
+        writer = cls.__new__(cls)
+        writer._width = width
+        writer._height = height
+        writer._channels = channels
+        writer._process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+        writer._stderr_chunks = []
+        writer._stderr_thread = threading.Thread(target=writer._drain_stderr, daemon=True)
+        writer._stderr_thread.start()
+        writer._encoder_name = encoder_name
+        return writer
+
     def _drain_stderr(self):
         try:
             for chunk in iter(lambda: self._process.stderr.read(4096), b""):
@@ -230,18 +253,7 @@ def create_writer(
             cmd.extend(["-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
         cmd.append(output_path)
 
-        writer = FFmpegWriter.__new__(FFmpegWriter)
-        writer._width = width
-        writer._height = height
-        writer._channels = 3
-        writer._process = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-        )
-        writer._stderr_chunks = []
-        writer._stderr_thread = threading.Thread(target=writer._drain_stderr, daemon=True)
-        writer._stderr_thread.start()
-        writer._encoder_name = encoder_name
-        return writer
+        return FFmpegWriter.from_cmd(cmd, width, height, encoder_name=encoder_name)
 
     if fmt == OutputFormat.MP4_AV1:
         preset = config.encoding_preset.value

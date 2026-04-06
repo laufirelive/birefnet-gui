@@ -392,6 +392,7 @@ class QueueTab(QWidget):
                 "inference": "推理中",
                 "temporal_fix": "时序修复中",
                 "encoding": "编码中",
+                "encoding_fallback": "编码中（已回退到软件编码）",
                 "processing": "处理中",
             }.get(phase, phase)
             self._status_label.setText(

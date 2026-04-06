@@ -160,9 +160,6 @@ NVENC_PRESET_MAP: dict[EncodingPreset, str] = {
     EncodingPreset.SLOWER: "p6",
     EncodingPreset.VERYSLOW: "p7",
 }
-# Private alias for internal use (kept for backward compat if any code used private name)
-_NVENC_PRESET_MAP = NVENC_PRESET_MAP
-
 # QSV preset names differ from x264 names.
 QSV_PRESET_MAP: dict[EncodingPreset, str] = {
     EncodingPreset.ULTRAFAST: "veryfast",
@@ -175,7 +172,6 @@ QSV_PRESET_MAP: dict[EncodingPreset, str] = {
     EncodingPreset.SLOWER: "slower",
     EncodingPreset.VERYSLOW: "veryslow",
 }
-_QSV_PRESET_MAP = QSV_PRESET_MAP
 
 # AMF uses a -quality flag instead of -preset.
 AMF_QUALITY_MAP: dict[EncodingPreset, str] = {
@@ -189,7 +185,6 @@ AMF_QUALITY_MAP: dict[EncodingPreset, str] = {
     EncodingPreset.SLOWER: "quality",
     EncodingPreset.VERYSLOW: "quality",
 }
-_AMF_QUALITY_MAP = AMF_QUALITY_MAP
 
 # Encoders that follow the standard libx264/libx265 preset names.
 _SOFTWARE_ENCODERS = {"libx264", "libx265"}

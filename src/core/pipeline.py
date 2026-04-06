@@ -155,9 +155,7 @@ class MattingPipeline:
                     if progress_callback:
                         progress_callback(idx + 1, total, "encoding")
         except RuntimeError as e:
-            if not fallback_attempted and self._config.encoder_type not in (
-                EncoderType.SOFTWARE, EncoderType.AUTO
-            ):
+            if not fallback_attempted and self._config.encoder_type != EncoderType.SOFTWARE:
                 import logging
                 logging.warning(f"Hardware encoder failed: {e}. Falling back to software encoding.")
                 fallback_attempted = True
