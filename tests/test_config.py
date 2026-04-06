@@ -1,6 +1,7 @@
 from src.core.config import (
     BackgroundMode,
     BitrateMode,
+    EncoderType,
     EncodingPreset,
     IMAGE_EXTENSIONS,
     InferenceResolution,
@@ -198,3 +199,21 @@ class TestProcessingConfig:
         assert config.model_name == "BiRefNet-lite"
         assert config.output_format == OutputFormat.MP4_H264
         assert config.background_mode == BackgroundMode.GREEN
+
+
+class TestEncoderType:
+    def test_all_values_exist(self):
+        assert EncoderType.AUTO.value == "auto"
+        assert EncoderType.SOFTWARE.value == "software"
+        assert EncoderType.NVENC.value == "nvenc"
+        assert EncoderType.VIDEOTOOLBOX.value == "videotoolbox"
+        assert EncoderType.QSV.value == "qsv"
+        assert EncoderType.AMF.value == "amf"
+
+    def test_is_str_enum(self):
+        assert isinstance(EncoderType.AUTO, str)
+        assert EncoderType.AUTO == "auto"
+
+    def test_processing_config_default_encoder_type(self):
+        config = ProcessingConfig()
+        assert config.encoder_type == EncoderType.AUTO

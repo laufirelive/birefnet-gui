@@ -86,6 +86,15 @@ class EncodingPreset(Enum):
         }[self]
 
 
+class EncoderType(str, Enum):
+    AUTO = "auto"
+    SOFTWARE = "software"
+    NVENC = "nvenc"
+    VIDEOTOOLBOX = "videotoolbox"
+    QSV = "qsv"
+    AMF = "amf"
+
+
 class InferenceResolution(Enum):
     RES_512 = 512
     RES_1024 = 1024
@@ -149,3 +158,4 @@ class ProcessingConfig:
     batch_size: int = 1
     inference_resolution: InferenceResolution = InferenceResolution.RES_1024
     temporal_fix: bool = True
+    encoder_type: EncoderType = EncoderType.AUTO
