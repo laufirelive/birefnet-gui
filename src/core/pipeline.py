@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from src.core.cache import MaskCacheManager
 from src.core.compositing import compose_frame
-from src.core.config import ProcessingConfig
+from src.core.config import EncoderType, ProcessingConfig
 from src.core.inference import detect_device, get_model_path, load_model, predict, predict_batch
 from src.core.temporal import detect_and_fix_outliers
 from src.core.video import FrameReader, get_video_info
@@ -116,6 +116,7 @@ class MattingPipeline:
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         pause_event: Optional[threading.Event] = None,
         cancel_event: Optional[threading.Event] = None,
+        encoder_registry=None,
     ) -> None:
         video_info = get_video_info(input_path)
         total = video_info["frame_count"]
@@ -126,26 +127,61 @@ class MattingPipeline:
             self._config, output_path, width, height, fps,
             audio_source=input_path,
             source_bitrate_mbps=source_bitrate,
+            encoder_registry=encoder_registry,
         )
 
-        with writer:
-            for idx, frame in enumerate(FrameReader(input_path)):
-                if cancel_event and cancel_event.is_set():
-                    break
-                if pause_event:
-                    while pause_event.is_set():
-                        if cancel_event and cancel_event.is_set():
-                            break
-                        time.sleep(0.1)
+        fallback_attempted = False
+        try:
+            with writer:
+                for idx, frame in enumerate(FrameReader(input_path)):
                     if cancel_event and cancel_event.is_set():
                         break
+                    if pause_event:
+                        while pause_event.is_set():
+                            if cancel_event and cancel_event.is_set():
+                                break
+                            time.sleep(0.1)
+                        if cancel_event and cancel_event.is_set():
+                            break
 
-                alpha = cache.load_mask(task_id, idx)
-                composed = compose_frame(frame, alpha, self._config.background_mode)
-                writer.write_frame(composed)
+                    alpha = cache.load_mask(task_id, idx)
+                    composed = compose_frame(frame, alpha, self._config.background_mode)
+                    writer.write_frame(composed)
+
+                    # Check for early failure after first frame (hardware encoder crash)
+                    if idx == 0 and hasattr(writer, '_process') and writer._process.poll() is not None:
+                        raise RuntimeError("Encoder process exited during first frame")
+
+                    if progress_callback:
+                        progress_callback(idx + 1, total, "encoding")
+        except RuntimeError as e:
+            if not fallback_attempted and self._config.encoder_type not in (
+                EncoderType.SOFTWARE, EncoderType.AUTO
+            ):
+                import logging
+                logging.warning(f"Hardware encoder failed: {e}. Falling back to software encoding.")
+                fallback_attempted = True
+
+                if os.path.exists(output_path) and os.path.isfile(output_path):
+                    os.remove(output_path)
 
                 if progress_callback:
-                    progress_callback(idx + 1, total, "encoding")
+                    progress_callback(0, total, "encoding_fallback")
+
+                from dataclasses import replace
+                sw_config = replace(self._config, encoder_type=EncoderType.SOFTWARE)
+                old_config = self._config
+                self._config = sw_config
+                try:
+                    self.encode_phase(
+                        input_path, output_path, task_id, cache,
+                        progress_callback, pause_event, cancel_event,
+                        encoder_registry=encoder_registry,
+                    )
+                finally:
+                    self._config = old_config
+                return
+            raise
 
         if cancel_event and cancel_event.is_set():
             if os.path.exists(output_path) and os.path.isfile(output_path):
@@ -163,6 +199,7 @@ class MattingPipeline:
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         pause_event: Optional[threading.Event] = None,
         cancel_event: Optional[threading.Event] = None,
+        encoder_registry=None,
     ) -> None:
         """Convenience method: run infer_phase, optional temporal_fix_phase, then encode_phase.
 
@@ -188,4 +225,5 @@ class MattingPipeline:
             self.encode_phase(
                 input_path, output_path, task_id, cache,
                 progress_callback, pause_event, cancel_event,
+                encoder_registry=encoder_registry,
             )
