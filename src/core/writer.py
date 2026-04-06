@@ -161,6 +161,7 @@ def create_writer(
     fps: float,
     audio_source: str | None = None,
     source_bitrate_mbps: float = 0.0,
+    encoder_registry=None,
 ):
     """Factory: return the appropriate writer based on config."""
     fmt = config.output_format
@@ -180,9 +181,9 @@ def create_writer(
         )
 
     bitrate_kbps = _resolve_bitrate_kbps(config, source_bitrate_mbps)
-    preset = config.encoding_preset.value
 
     if fmt == OutputFormat.WEBM_VP9:
+        preset = config.encoding_preset.value
         if is_alpha:
             return FFmpegWriter(
                 output_path, width, height, fps,
@@ -204,28 +205,45 @@ def create_writer(
             preset=preset,
         )
 
-    if fmt == OutputFormat.MP4_H264:
-        return FFmpegWriter(
-            output_path, width, height, fps,
-            codec="libx264",
-            pix_fmt="yuv420p",
-            audio_source=audio_source,
-            bitrate_kbps=bitrate_kbps,
-            preset=preset,
-        )
+    if fmt in (OutputFormat.MP4_H264, OutputFormat.MP4_H265):
+        from src.core.encoder_registry import get_encoder_args
 
-    if fmt == OutputFormat.MP4_H265:
-        return FFmpegWriter(
-            output_path, width, height, fps,
-            codec="libx265",
-            pix_fmt="yuv420p",
-            extra_args=["-tag:v", "hvc1"],
-            audio_source=audio_source,
-            bitrate_kbps=bitrate_kbps,
-            preset=preset,
+        if encoder_registry is not None:
+            encoder_name = encoder_registry.resolve(fmt, config.encoder_type)
+        else:
+            encoder_name = "libx264" if fmt == OutputFormat.MP4_H264 else "libx265"
+
+        codec_args = get_encoder_args(encoder_name, config.encoding_preset, bitrate_kbps)
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "rawvideo", "-pix_fmt", "rgb24",
+            "-s", f"{width}x{height}", "-r", str(fps),
+            "-i", "-",
+        ]
+        if audio_source:
+            cmd.extend(["-i", audio_source])
+        cmd.extend(codec_args)
+        cmd.extend(["-pix_fmt", "yuv420p"])
+        if audio_source:
+            cmd.extend(["-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
+        cmd.append(output_path)
+
+        writer = FFmpegWriter.__new__(FFmpegWriter)
+        writer._width = width
+        writer._height = height
+        writer._channels = 3
+        writer._process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
         )
+        writer._stderr_chunks = []
+        writer._stderr_thread = threading.Thread(target=writer._drain_stderr, daemon=True)
+        writer._stderr_thread.start()
+        writer._encoder_name = encoder_name
+        return writer
 
     if fmt == OutputFormat.MP4_AV1:
+        preset = config.encoding_preset.value
         av1_cpu_used = config.encoding_preset.av1_cpu_used
         return FFmpegWriter(
             output_path, width, height, fps,

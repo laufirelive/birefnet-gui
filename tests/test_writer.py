@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pytest
 
-from src.core.config import BackgroundMode, OutputFormat, ProcessingConfig
+from src.core.config import BackgroundMode, EncoderType, OutputFormat, ProcessingConfig
 from src.core.video import get_video_info
 from src.core.writer import FFmpegWriter, ImageSequenceWriter, create_writer
 
@@ -247,3 +247,66 @@ class TestCreateWriterAdvanced:
             create_writer(config, output_path, 64, 64, 30.0)
             _, kwargs = mock_prores.call_args
             assert kwargs["profile"] == 0
+
+
+class TestCreateWriterWithEncoder:
+    def _make_registry(self, available_encoders: list[str]):
+        from unittest.mock import patch, MagicMock
+        from src.core.encoder_registry import EncoderRegistry
+        mock_result = MagicMock()
+        lines = ["Encoders:", " ------"]
+        for enc in available_encoders:
+            lines.append(f" V....D {enc}           description")
+        mock_result.stdout = "\n".join(lines)
+        mock_result.returncode = 0
+        with patch("src.core.encoder_registry.subprocess.run", return_value=mock_result):
+            return EncoderRegistry()
+
+    def test_h264_auto_picks_nvenc_when_available(self, temp_output_dir):
+        """With NVENC available, AUTO should resolve to h264_nvenc."""
+        from unittest.mock import patch, MagicMock
+        reg = self._make_registry(["libx264", "libx265", "h264_nvenc", "hevc_nvenc"])
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+            encoder_type=EncoderType.AUTO,
+        )
+        output_path = os.path.join(temp_output_dir, "test.mp4")
+        with patch("src.core.writer.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.stdin = MagicMock()
+            mock_proc.stderr = MagicMock()
+            mock_proc.stderr.read = MagicMock(return_value=b"")
+            mock_popen.return_value = mock_proc
+            writer = create_writer(config, output_path, 64, 64, 30.0, encoder_registry=reg)
+            cmd = mock_popen.call_args[0][0]
+            assert "h264_nvenc" in cmd
+
+    def test_h264_software_explicit(self, temp_output_dir):
+        from unittest.mock import patch, MagicMock
+        reg = self._make_registry(["libx264", "libx265", "h264_nvenc"])
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+            encoder_type=EncoderType.SOFTWARE,
+        )
+        output_path = os.path.join(temp_output_dir, "test.mp4")
+        with patch("src.core.writer.subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.stdin = MagicMock()
+            mock_proc.stderr = MagicMock()
+            mock_proc.stderr.read = MagicMock(return_value=b"")
+            mock_popen.return_value = mock_proc
+            writer = create_writer(config, output_path, 64, 64, 30.0, encoder_registry=reg)
+            cmd = mock_popen.call_args[0][0]
+            assert "libx264" in cmd
+
+    def test_no_registry_uses_software(self, temp_output_dir):
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+        )
+        output_path = os.path.join(temp_output_dir, "test.mp4")
+        writer = create_writer(config, output_path, 64, 64, 30.0)
+        assert isinstance(writer, FFmpegWriter)
+        writer.close()
