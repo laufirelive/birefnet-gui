@@ -116,24 +116,30 @@ class ProResWriter:
         audio_source: str | None = None,
         profile: int = 3,
         has_alpha: bool = False,
+        encoder_registry=None,
     ):
         self._output_path = output_path
         self._width = width
         self._height = height
         self._channels = 4 if has_alpha else 3
 
+        def check_encoder(name: str) -> bool:
+            if encoder_registry is not None:
+                return encoder_registry.is_available(name)
+            return _has_encoder(name)
+
         # Determine best available ProRes encoder and pixel formats
-        if has_alpha and _has_encoder("prores_ks"):
+        if has_alpha and check_encoder("prores_ks"):
             encoder = "prores_ks"
             input_pix_fmt = "rgba"
             output_pix_fmt = "yuva444p10le"
-        elif _has_encoder("prores_ks"):
+        elif check_encoder("prores_ks"):
             encoder = "prores_ks"
             input_pix_fmt = "rgb24"
             output_pix_fmt = "yuv422p10le"
             if profile >= 4:
                 profile = 3
-        elif _has_encoder("prores_aw"):
+        elif check_encoder("prores_aw"):
             encoder = "prores_aw"
             input_pix_fmt = "rgb24"
             output_pix_fmt = "yuv422p10le"

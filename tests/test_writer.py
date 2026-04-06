@@ -310,3 +310,32 @@ class TestCreateWriterWithEncoder:
         writer = create_writer(config, output_path, 64, 64, 30.0)
         assert isinstance(writer, FFmpegWriter)
         writer.close()
+
+
+class TestProResWriterWithRegistry:
+    def test_prores_works_with_registry(self, temp_output_dir):
+        from unittest.mock import patch, MagicMock
+        from src.core.video import ProResWriter
+        from src.core.encoder_registry import EncoderRegistry
+        mock_result = MagicMock()
+        mock_result.stdout = " V....D prores_ks            Apple ProRes\n V....D libx264\n"
+        mock_result.returncode = 0
+        with patch("src.core.encoder_registry.subprocess.run", return_value=mock_result):
+            reg = EncoderRegistry()
+        output_path = os.path.join(temp_output_dir, "test_reg.mov")
+        writer = ProResWriter(output_path, 64, 64, 30.0, profile=3, has_alpha=False, encoder_registry=reg)
+        for _ in range(3):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+        assert os.path.exists(output_path)
+
+    def test_prores_works_without_registry(self, temp_output_dir):
+        from src.core.video import ProResWriter
+        output_path = os.path.join(temp_output_dir, "test_noreg.mov")
+        writer = ProResWriter(output_path, 64, 64, 30.0, profile=3, has_alpha=False)
+        for _ in range(3):
+            frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+            writer.write_frame(frame)
+        writer.close()
+        assert os.path.exists(output_path)

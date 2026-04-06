@@ -178,6 +178,7 @@ def create_writer(
         return ProResWriter(
             output_path, width, height, fps,
             audio_source=audio_source, profile=profile, has_alpha=is_alpha,
+            encoder_registry=encoder_registry,
         )
 
     bitrate_kbps = _resolve_bitrate_kbps(config, source_bitrate_mbps)

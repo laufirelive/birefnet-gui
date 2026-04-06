@@ -6,6 +6,7 @@ from enum import Enum
 from src.core.config import (
     BackgroundMode,
     BitrateMode,
+    EncoderType,
     EncodingPreset,
     InferenceResolution,
     InputType,
@@ -83,6 +84,7 @@ class QueueTask:
                 "batch_size": self.config.batch_size,
                 "inference_resolution": self.config.inference_resolution.value,
                 "temporal_fix": self.config.temporal_fix,
+                "encoder_type": self.config.encoder_type.value,
             },
             "output_dir": self.output_dir,
             "output_path": self.output_path,
@@ -107,6 +109,7 @@ class QueueTask:
             batch_size=cfg.get("batch_size", 1),
             inference_resolution=InferenceResolution(cfg.get("inference_resolution", 1024)),
             temporal_fix=cfg.get("temporal_fix", True),
+            encoder_type=EncoderType(cfg.get("encoder_type", "auto")),
         )
         return cls(
             id=d["id"],

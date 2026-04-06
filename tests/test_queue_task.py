@@ -4,6 +4,7 @@ import time
 from src.core.config import (
     BackgroundMode,
     BitrateMode,
+    EncoderType,
     EncodingPreset,
     InferenceResolution,
     InputType,
@@ -173,3 +174,38 @@ class TestQueueTaskNewFieldsSerialization:
         assert restored.config.encoding_preset == EncodingPreset.SLOW
         assert restored.config.batch_size == 4
         assert restored.config.inference_resolution == InferenceResolution.RES_2048
+
+
+class TestQueueTaskEncoderTypeCompat:
+    def test_old_brm_without_encoder_type_defaults_auto(self):
+        old_dict = {
+            "id": "enc_test",
+            "input_path": "/tmp/video.mp4",
+            "input_type": "video",
+            "config": {
+                "model_name": "BiRefNet-general",
+                "output_format": "mp4_h264",
+                "background_mode": "green",
+            },
+            "output_dir": None, "output_path": None,
+            "status": "pending", "progress": 0, "total": 0,
+            "phase": "inference", "error": None, "created_at": 1712200000.0,
+        }
+        task = QueueTask.from_dict(old_dict)
+        assert task.config.encoder_type == EncoderType.AUTO
+
+    def test_roundtrip_with_encoder_type(self):
+        config = ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+            encoder_type=EncoderType.NVENC,
+        )
+        task = QueueTask.create(
+            input_path="/tmp/video.mp4",
+            input_type=InputType.VIDEO,
+            config=config,
+        )
+        d = task.to_dict()
+        assert d["config"]["encoder_type"] == "nvenc"
+        restored = QueueTask.from_dict(d)
+        assert restored.config.encoder_type == EncoderType.NVENC
