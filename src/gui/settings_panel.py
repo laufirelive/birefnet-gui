@@ -166,12 +166,11 @@ class SettingsPanel(QWidget):
         self._encoder_label = QLabel("编码器:")
         output_layout.addWidget(self._encoder_label)
         self._encoder_combo = QComboBox()
+        self._encoder_hint = QLabel("")
+        self._encoder_hint.setStyleSheet("color: gray; font-size: 11px;")
         self._populate_encoder_combo()
         self._encoder_combo.currentIndexChanged.connect(self._on_encoder_changed)
         output_layout.addWidget(self._encoder_combo)
-
-        self._encoder_hint = QLabel("")
-        self._encoder_hint.setStyleSheet("color: gray; font-size: 11px;")
         output_layout.addWidget(self._encoder_hint)
 
         output_layout.addWidget(QLabel("背景:"))
