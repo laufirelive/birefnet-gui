@@ -39,6 +39,7 @@ class MattingWorker(QThread):
         start_frame: int = 0,
         start_phase: str = "inference",
         cleanup_cache: bool = True,
+        encoder_registry=None,
     ):
         super().__init__()
         self._config = config
@@ -50,6 +51,7 @@ class MattingWorker(QThread):
         self._start_frame = start_frame
         self._start_phase = start_phase
         self._cleanup_cache = cleanup_cache
+        self._encoder_registry = encoder_registry
 
         self._pause_event = threading.Event()
         self._cancel_event = threading.Event()
@@ -87,6 +89,7 @@ class MattingWorker(QThread):
                 progress_callback=self._on_progress,
                 pause_event=self._pause_event,
                 cancel_event=self._cancel_event,
+                encoder_registry=self._encoder_registry,
             )
         finally:
             pipeline.release()

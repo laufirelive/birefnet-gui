@@ -28,6 +28,7 @@ from src.core.config import (
     ProcessingConfig,
     VIDEO_EXTENSIONS,
 )
+from src.core.encoder_registry import EncoderRegistry
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import QueueTask, TaskStatus
 from src.core.video import get_video_info
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
         self._queue_manager = QueueManager(brm_path=BRM_PATH)
         self._queue_manager.load()
         self._notifier = Notifier()
+        self._encoder_registry = EncoderRegistry()
 
         self._init_ui()
         self.setAcceptDrops(True)
@@ -160,14 +162,14 @@ class MainWindow(QMainWindow):
         left_panel.addStretch()
 
         # --- Right panel: SettingsPanel ---
-        self._settings_panel = SettingsPanel(MODELS_DIR)
+        self._settings_panel = SettingsPanel(MODELS_DIR, encoder_registry=self._encoder_registry)
 
         # --- Assemble tab1 ---
         main_layout.addLayout(left_panel, stretch=2)
         main_layout.addWidget(self._settings_panel, stretch=1)
 
         # --- Tab 2: Queue ---
-        self._queue_tab = QueueTab(self._queue_manager, self._get_config, notifier=self._notifier)
+        self._queue_tab = QueueTab(self._queue_manager, self._get_config, notifier=self._notifier, encoder_registry=self._encoder_registry)
         self._queue_tab.queue_running_changed.connect(self._on_queue_running_changed)
         self._queue_tab.task_count_changed.connect(
             lambda count: self._tabs.setTabText(1, f"批量队列 ({count})" if count > 0 else "批量队列")
@@ -467,6 +469,7 @@ class MainWindow(QMainWindow):
         self._worker = MattingWorker(
             config, models_dir, self._input_path, output_path,
             input_type=self._input_type,
+            encoder_registry=self._encoder_registry,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)

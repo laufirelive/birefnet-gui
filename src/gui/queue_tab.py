@@ -51,11 +51,12 @@ class QueueTab(QWidget):
     queue_running_changed = pyqtSignal(bool)
     task_count_changed = pyqtSignal(int)
 
-    def __init__(self, queue_manager: QueueManager, get_default_config_fn, notifier=None, parent=None):
+    def __init__(self, queue_manager: QueueManager, get_default_config_fn, notifier=None, encoder_registry=None, parent=None):
         super().__init__(parent)
         self._qm = queue_manager
         self._get_default_config = get_default_config_fn
         self._notifier = notifier
+        self._encoder_registry = encoder_registry
         self._current_worker: MattingWorker | None = None
         self._cache = MaskCacheManager(get_cache_dir())
         self._start_time: float | None = None
@@ -323,6 +324,7 @@ class QueueTab(QWidget):
             start_frame=start_frame,
             start_phase=start_phase,
             cleanup_cache=False,
+            encoder_registry=self._encoder_registry,
         )
         self._current_worker.progress.connect(
             lambda c, t, p: self._on_task_progress(task.id, c, t, p)
