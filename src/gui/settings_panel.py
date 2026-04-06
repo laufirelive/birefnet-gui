@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 from src.core.config import (
     BackgroundMode,
     BitrateMode,
+    EncoderType,
     EncodingPreset,
     InferenceResolution,
     InputType,
@@ -80,18 +81,28 @@ PRESET_LABELS = {
     EncodingPreset.VERYSLOW: "veryslow (最慢)",
 }
 
+ENCODER_LABELS = {
+    EncoderType.AUTO: "自动检测",
+    EncoderType.SOFTWARE: "软件编码",
+    EncoderType.NVENC: "NVIDIA NVENC",
+    EncoderType.VIDEOTOOLBOX: "Apple VideoToolbox",
+    EncoderType.QSV: "Intel QSV",
+    EncoderType.AMF: "AMD AMF",
+}
+
 
 class SettingsPanel(QWidget):
     """Right-side settings panel with model, output, and advanced parameters."""
 
     settings_changed = pyqtSignal()
 
-    def __init__(self, models_dir: str, parent=None):
+    def __init__(self, models_dir: str, encoder_registry=None, parent=None):
         super().__init__(parent)
         self._models_dir = os.path.abspath(models_dir)
         self._source_bitrate_mbps = 0.0
         self._input_type: InputType | None = None
         self._device_info = get_device_info()
+        self._encoder_registry = encoder_registry
 
         self._init_ui()
         self._update_advanced_visibility()
@@ -151,6 +162,17 @@ class SettingsPanel(QWidget):
             self._format_combo.addItem(label, fmt)
         self._format_combo.currentIndexChanged.connect(self._on_format_changed)
         output_layout.addWidget(self._format_combo)
+
+        self._encoder_label = QLabel("编码器:")
+        output_layout.addWidget(self._encoder_label)
+        self._encoder_combo = QComboBox()
+        self._populate_encoder_combo()
+        self._encoder_combo.currentIndexChanged.connect(self._on_encoder_changed)
+        output_layout.addWidget(self._encoder_combo)
+
+        self._encoder_hint = QLabel("")
+        self._encoder_hint.setStyleSheet("color: gray; font-size: 11px;")
+        output_layout.addWidget(self._encoder_hint)
 
         output_layout.addWidget(QLabel("背景:"))
         self._mode_combo = QComboBox()
@@ -270,9 +292,43 @@ class SettingsPanel(QWidget):
         if recommended in batch_values:
             self._batch_combo.setCurrentIndex(batch_values.index(recommended))
 
+    def _populate_encoder_combo(self):
+        self._encoder_combo.blockSignals(True)
+        self._encoder_combo.clear()
+        fmt = self._format_combo.currentData()
+        if self._encoder_registry and fmt in (OutputFormat.MP4_H264, OutputFormat.MP4_H265):
+            available = self._encoder_registry.get_available_types(fmt)
+            for enc_type in available:
+                self._encoder_combo.addItem(ENCODER_LABELS.get(enc_type, enc_type.value), enc_type)
+        else:
+            self._encoder_combo.addItem(ENCODER_LABELS[EncoderType.AUTO], EncoderType.AUTO)
+        self._encoder_combo.blockSignals(False)
+        self._update_encoder_hint()
+
+    def _on_encoder_changed(self, _index):
+        self._update_encoder_hint()
+        self._update_advanced_visibility()
+        self.settings_changed.emit()
+
+    def _update_encoder_hint(self):
+        enc_type = self._encoder_combo.currentData()
+        fmt = self._format_combo.currentData()
+        if (enc_type == EncoderType.AUTO and self._encoder_registry
+                and fmt in (OutputFormat.MP4_H264, OutputFormat.MP4_H265)):
+            resolved = self._encoder_registry.resolve(fmt, EncoderType.AUTO)
+            from src.core.encoder_registry import ENCODER_CANDIDATES
+            candidates = ENCODER_CANDIDATES.get(fmt, {})
+            for et, name in candidates.items():
+                if name == resolved:
+                    self._encoder_hint.setText(f"→ {ENCODER_LABELS.get(et, resolved)}")
+                    self._encoder_hint.setVisible(True)
+                    return
+        self._encoder_hint.setVisible(False)
+
     def _on_format_changed(self, _index):
         self._populate_mode_combo()
         self._populate_bitrate_combo()
+        self._populate_encoder_combo()
         self._update_advanced_visibility()
         self.settings_changed.emit()
 
@@ -307,6 +363,21 @@ class SettingsPanel(QWidget):
         self._temporal_fix_checkbox.setVisible(is_video)
 
         self._advanced_group.setVisible(show_bitrate or show_preset or is_video)
+
+        # Encoder visibility: only for H.264/H.265
+        show_encoder = not is_image and fmt in (OutputFormat.MP4_H264, OutputFormat.MP4_H265)
+        self._encoder_label.setVisible(show_encoder)
+        self._encoder_combo.setVisible(show_encoder)
+        self._encoder_hint.setVisible(
+            show_encoder and self._encoder_hint.text() != ""
+        )
+
+        # Disable preset for VideoToolbox (no preset support)
+        enc_type = self._encoder_combo.currentData()
+        if show_preset and enc_type == EncoderType.VIDEOTOOLBOX:
+            self._preset_combo.setEnabled(False)
+        else:
+            self._preset_combo.setEnabled(True)
 
         show_batch = self._input_type != InputType.IMAGE
         self._batch_combo.setVisible(show_batch)
@@ -353,6 +424,7 @@ class SettingsPanel(QWidget):
             batch_size=self._batch_combo.currentData() or 1,
             inference_resolution=self._resolution_combo.currentData() or InferenceResolution.RES_1024,
             temporal_fix=self._temporal_fix_checkbox.isChecked(),
+            encoder_type=self._encoder_combo.currentData() or EncoderType.AUTO,
         )
 
     def refresh_models(self):
