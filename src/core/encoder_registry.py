@@ -5,10 +5,13 @@ Also provides :func:`get_encoder_args` which builds the ffmpeg codec argument
 list for a given encoder name, encoding preset, and target bitrate.
 """
 
+import logging
 import subprocess
 from typing import Optional
 
 from src.core.config import EncoderType, EncodingPreset, OutputFormat
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Static data
@@ -81,6 +84,19 @@ class EncoderRegistry:
             # parts[0] is the capability flags (e.g. "V....."), parts[1] is name
             self._available.add(parts[1])
 
+        # Log hardware encoder availability for diagnostics
+        hw_encoders = {
+            "h264_nvenc", "hevc_nvenc",
+            "h264_videotoolbox", "hevc_videotoolbox",
+            "h264_qsv", "hevc_qsv",
+            "h264_amf", "hevc_amf",
+        }
+        found_hw = hw_encoders & self._available
+        if found_hw:
+            logger.info("Hardware encoders available: %s", ", ".join(sorted(found_hw)))
+        else:
+            logger.info("No hardware encoders found in ffmpeg")
+
     # ------------------------------------------------------------------
     # Public API
 
@@ -126,6 +142,10 @@ class EncoderRegistry:
             for candidate in AUTO_PRIORITY:
                 name = mapping[candidate]
                 if self.is_available(name):
+                    logger.info(
+                        "Encoder resolved: %s (AUTO selected %s for %s)",
+                        name, candidate.value, fmt.value,
+                    )
                     return name
             # Should never reach here because SOFTWARE is always in AUTO_PRIORITY,
             # but be safe.
@@ -134,13 +154,22 @@ class EncoderRegistry:
         # Explicit type requested
         if encoder_type not in mapping:
             # Requested type not in candidates for this format → SOFTWARE
+            logger.warning(
+                "Encoder type %s not available for %s, falling back to %s",
+                encoder_type.value, fmt.value, software_encoder,
+            )
             return software_encoder
 
         requested_name = mapping[encoder_type]
         if self.is_available(requested_name):
+            logger.info("Encoder resolved: %s (%s for %s)", requested_name, encoder_type.value, fmt.value)
             return requested_name
 
         # Requested encoder not available; fall back to SOFTWARE
+        logger.warning(
+            "Requested encoder %s (%s) not available, falling back to %s",
+            requested_name, encoder_type.value, software_encoder,
+        )
         return software_encoder
 
 
