@@ -721,7 +721,9 @@ class MainWindow(QMainWindow):
         fps = self._video_info["fps"]
         total = self._video_info["frame_count"]
         t = frame_number / fps if fps > 0 else 0
-        self._frame_info_label.setText(f"帧: {frame_number}/{total}  {t:.1f}s")
+        mins = int(t // 60)
+        secs = t % 60
+        self._frame_info_label.setText(f"帧: {frame_number}/{total}  {mins:02d}:{secs:04.1f}")
 
     def _on_slider_released(self):
         frame_number = self._frame_slider.value()
