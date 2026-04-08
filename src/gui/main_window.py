@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("BiRefNet Video Matting Tool")
         self.setMinimumSize(800, 550)
+        self.resize(1100, 750)
 
         self._worker = None
         self._input_path = None

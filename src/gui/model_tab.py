@@ -1,6 +1,6 @@
 import os
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -150,6 +150,7 @@ class ModelTab(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._card_container = QWidget()
         self._card_layout = QVBoxLayout(self._card_container)
         self._card_layout.setSpacing(8)
