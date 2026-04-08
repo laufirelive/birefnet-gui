@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 import threading
@@ -7,6 +8,8 @@ from PIL import Image
 
 from src.core.config import BackgroundMode, BitrateMode, OutputFormat, ProcessingConfig
 from src.core.video import ProResWriter
+
+logger = logging.getLogger(__name__)
 
 
 class FFmpegWriter:
@@ -253,6 +256,7 @@ def create_writer(
             cmd.extend(["-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
         cmd.append(output_path)
 
+        logger.info("FFmpeg encode command: %s", " ".join(cmd))
         return FFmpegWriter.from_cmd(cmd, width, height, encoder_name=encoder_name)
 
     if fmt == OutputFormat.MP4_AV1:

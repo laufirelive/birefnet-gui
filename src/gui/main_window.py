@@ -1,8 +1,9 @@
 import os
 import time
 
+import numpy as np
 from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -13,6 +14,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSlider,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -37,7 +39,11 @@ from src.gui.queue_tab import QueueTab
 from src.gui.settings_panel import SettingsPanel
 from src.gui.settings_tab import SettingsTab
 from src.gui.notifier import Notifier
+from src.core.frame_extractor import extract_frame
+from src.core.compositing import render_checkerboard_preview
+from src.gui.image_viewer import ImageViewerDialog
 from src.worker.matting_worker import MattingWorker
+from src.worker.preview_worker import PreviewWorker
 
 
 def _format_duration(seconds: float) -> str:
@@ -66,6 +72,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("BiRefNet Video Matting Tool")
         self.setMinimumSize(800, 550)
+        self.resize(1100, 750)
 
         self._worker = None
         self._input_path = None
@@ -73,6 +80,10 @@ class MainWindow(QMainWindow):
         self._start_time = None
         self._input_type = None
         self._current_phase = None
+        self._video_info = None
+        self._current_frame_rgb = None
+        self._displayed_rgb = None
+        self._preview_worker = None
 
         self._queue_manager = QueueManager(brm_path=BRM_PATH)
         self._queue_manager.load()
@@ -149,6 +160,34 @@ class MainWindow(QMainWindow):
         sep2.setFrameStyle(QLabel.Shape.HLine | QLabel.Shadow.Sunken)
         left_panel.addWidget(sep2)
 
+        # --- Preview pane ---
+        self._preview_label = QLabel("选择视频后预览")
+        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setStyleSheet(
+            "background: #2a2a2a; color: #888; border: 1px solid #444; border-radius: 4px;"
+        )
+        self._preview_label.setMinimumHeight(120)
+        self._preview_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._preview_label.mousePressEvent = self._on_preview_clicked
+        left_panel.addWidget(self._preview_label, stretch=1)
+
+        # Frame slider
+        self._frame_slider = QSlider(Qt.Orientation.Horizontal)
+        self._frame_slider.setEnabled(False)
+        self._frame_slider.setRange(0, 0)
+        self._frame_slider.sliderReleased.connect(self._on_slider_released)
+        left_panel.addWidget(self._frame_slider)
+
+        # Frame info label
+        self._frame_info_label = QLabel("")
+        self._frame_info_label.setStyleSheet("color: gray;")
+        left_panel.addWidget(self._frame_info_label)
+
+        # Separator before progress
+        sep3 = QLabel()
+        sep3.setFrameStyle(QLabel.Shape.HLine | QLabel.Shadow.Sunken)
+        left_panel.addWidget(sep3)
+
         # Progress
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 100)
@@ -158,8 +197,6 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("")
         self._status_label.setStyleSheet("color: gray;")
         left_panel.addWidget(self._status_label)
-
-        left_panel.addStretch()
 
         # --- Right panel: SettingsPanel ---
         self._settings_panel = SettingsPanel(MODELS_DIR, encoder_registry=self._encoder_registry)
@@ -200,6 +237,10 @@ class MainWindow(QMainWindow):
         btn_row.setContentsMargins(16, 8, 16, 8)
         btn_row.addStretch()
 
+        self._preview_btn = QPushButton("预览")
+        self._preview_btn.clicked.connect(self._on_preview)
+        btn_row.addWidget(self._preview_btn)
+
         self._start_btn = QPushButton("开始处理")
         self._start_btn.clicked.connect(self._on_start)
         btn_row.addWidget(self._start_btn)
@@ -236,12 +277,16 @@ class MainWindow(QMainWindow):
 
     def _set_state(self, state: str):
         self._state = state
+        has_input = self._input_path is not None
+        is_video = self._input_type == InputType.VIDEO
         if state == "initial":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(True)
+            self._frame_slider.setEnabled(False)
             self._progress_bar.setValue(0)
             self._status_label.setText("")
         elif state == "ready":
@@ -249,14 +294,18 @@ class MainWindow(QMainWindow):
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
+            self._preview_btn.setEnabled(has_input and self._input_type != InputType.IMAGE_FOLDER)
             self._select_btn.setEnabled(True)
+            self._frame_slider.setEnabled(is_video)
         elif state == "processing":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(True)
             self._pause_btn.setText("暂停")
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._frame_slider.setEnabled(False)
             self._queue_tab._start_btn.setEnabled(False)
         elif state == "paused":
             self._start_btn.setEnabled(False)
@@ -264,15 +313,18 @@ class MainWindow(QMainWindow):
             self._pause_btn.setText("继续")
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._frame_slider.setEnabled(False)
             self._queue_tab._start_btn.setEnabled(False)
         elif state == "finished":
             self._start_btn.setEnabled(True)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
+            self._preview_btn.setEnabled(has_input and self._input_type != InputType.IMAGE_FOLDER)
             self._select_btn.setEnabled(True)
-            # Re-enable queue start if queue is idle and has pending tasks
+            self._frame_slider.setEnabled(is_video)
             if self._queue_tab._queue_state == "idle":
                 has_pending = self._queue_manager.next_pending_task() is not None
                 self._queue_tab._start_btn.setEnabled(has_pending)
@@ -356,6 +408,13 @@ class MainWindow(QMainWindow):
 
             self._settings_panel.set_source_bitrate(bitrate)
 
+            self._video_info = info
+            self._frame_slider.setRange(0, max(0, info["frame_count"] - 1))
+            self._frame_slider.setValue(0)
+            self._frame_slider.setVisible(True)
+            self._frame_info_label.setVisible(True)
+            self._extract_and_show_frame(0)
+
         elif input_type == InputType.IMAGE:
             from PIL import Image
             try:
@@ -372,6 +431,16 @@ class MainWindow(QMainWindow):
 
             self._settings_panel.set_source_bitrate(0.0)
 
+            self._video_info = None
+            self._frame_slider.setEnabled(False)
+            self._frame_slider.setVisible(False)
+            self._frame_slider.setRange(0, 0)
+            self._frame_info_label.setVisible(False)
+            self._frame_info_label.setText("")
+            rgb_array = np.array(img.convert("RGB"))
+            self._current_frame_rgb = rgb_array
+            self._display_frame(rgb_array)
+
         elif input_type == InputType.IMAGE_FOLDER:
             image_files = [
                 f for f in os.listdir(path)
@@ -386,6 +455,16 @@ class MainWindow(QMainWindow):
             self._info_label.setText(f"图片文件夹: {count} 张图片")
 
             self._settings_panel.set_source_bitrate(0.0)
+
+            self._video_info = None
+            self._frame_slider.setEnabled(False)
+            self._frame_slider.setVisible(False)
+            self._frame_slider.setRange(0, 0)
+            self._frame_info_label.setVisible(False)
+            self._frame_info_label.setText("")
+            self._preview_label.clear()
+            self._preview_label.setText("文件夹模式无预览")
+            self._current_frame_rgb = None
 
         self._settings_panel.set_input_type(input_type)
         self._set_state("ready")
@@ -580,6 +659,16 @@ class MainWindow(QMainWindow):
         self._set_state("initial")
         self._settings_panel.set_input_type(None)
 
+        self._video_info = None
+        self._current_frame_rgb = None
+        self._displayed_rgb = None
+        self._preview_label.clear()
+        self._preview_label.setText("选择视频后预览")
+        self._frame_slider.setRange(0, 0)
+        self._frame_slider.setVisible(True)
+        self._frame_info_label.setText("")
+        self._frame_info_label.setVisible(True)
+
         self.statusBar().showMessage("已加入队列", 3000)
 
     def _on_models_changed(self):
@@ -601,6 +690,100 @@ class MainWindow(QMainWindow):
             # Restore based on current state
             self._set_state(self._state)
 
+    def _display_frame(self, rgb: np.ndarray):
+        """Display an RGB numpy array in the preview label, scaled to fit."""
+        self._displayed_rgb = rgb.copy()
+        h, w, _ = rgb.shape
+        qimage = QImage(rgb.data, w, h, w * 3, QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(qimage)
+        scaled = pixmap.scaled(
+            self._preview_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._preview_label.setPixmap(scaled)
+
+    def _extract_and_show_frame(self, frame_number: int):
+        """Extract a frame from the current video and display it."""
+        if not self._video_info or not self._input_path:
+            return
+        try:
+            rgb = extract_frame(
+                self._input_path,
+                frame_number,
+                self._video_info["fps"],
+                self._video_info["width"],
+                self._video_info["height"],
+            )
+        except RuntimeError:
+            return
+        self._current_frame_rgb = rgb
+        self._display_frame(rgb)
+        fps = self._video_info["fps"]
+        total = self._video_info["frame_count"]
+        t = frame_number / fps if fps > 0 else 0
+        mins = int(t // 60)
+        secs = t % 60
+        self._frame_info_label.setText(f"帧: {frame_number}/{total}  {mins:02d}:{secs:04.1f}")
+
+    def _on_slider_released(self):
+        frame_number = self._frame_slider.value()
+        self._extract_and_show_frame(frame_number)
+
+    def _on_preview(self):
+        """Run single-frame matting preview on the current frame."""
+        if self._current_frame_rgb is None:
+            return
+        if not self._model_tab.has_any_model():
+            QMessageBox.warning(self, "提示", "请先在「模型管理」中下载至少一个模型")
+            self._tabs.setCurrentWidget(self._model_tab)
+            return
+
+        config = self._get_config()
+        models_dir = os.path.abspath(MODELS_DIR)
+
+        model_dir_name = MODELS[config.model_name]
+        model_path = os.path.join(models_dir, model_dir_name)
+        if not os.path.isdir(model_path):
+            QMessageBox.critical(self, "模型缺失", f"未找到 {config.model_name} 模型")
+            return
+
+        # PreviewWorker expects BGR frame
+        frame_bgr = self._current_frame_rgb[:, :, ::-1].copy()
+
+        self._preview_btn.setEnabled(False)
+        self._status_label.setText("正在加载模型并预览...")
+
+        self._preview_worker = PreviewWorker(
+            model_name=config.model_name,
+            models_dir=models_dir,
+            frame=frame_bgr,
+            resolution=config.inference_resolution.value,
+        )
+        self._preview_worker.finished.connect(self._on_preview_finished)
+        self._preview_worker.error.connect(self._on_preview_error)
+        self._preview_worker.start()
+
+    def _on_preview_finished(self, alpha: np.ndarray):
+        """Handle preview inference result."""
+        self._preview_btn.setEnabled(True)
+        self._status_label.setText("")
+        result = render_checkerboard_preview(self._current_frame_rgb, alpha)
+        self._display_frame(result)
+
+    def _on_preview_error(self, message: str):
+        """Handle preview inference error."""
+        self._preview_btn.setEnabled(True)
+        self._status_label.setText("")
+        QMessageBox.critical(self, "预览失败", f"预览出错:\n{message}")
+
+    def _on_preview_clicked(self, event):
+        """Open the image viewer dialog when the preview pane is clicked."""
+        if self._displayed_rgb is None:
+            return
+        dialog = ImageViewerDialog(self._displayed_rgb, parent=self)
+        dialog.exec()
+
     def closeEvent(self, event):
         # Stop single-task worker
         if self._worker and self._worker.isRunning():
@@ -616,5 +799,7 @@ class MainWindow(QMainWindow):
             task = self._queue_tab._current_running_task()
             if task and task.status in (TaskStatus.PROCESSING, TaskStatus.CANCELLED):
                 task.status = TaskStatus.PAUSED
+        if self._preview_worker and self._preview_worker.isRunning():
+            self._preview_worker.wait()
         self._queue_manager.save()
         event.accept()

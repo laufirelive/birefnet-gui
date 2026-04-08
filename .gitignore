@@ -22,6 +22,9 @@ models/
 .DS_Store
 Thumbs.db
 
+# Logs
+*.log
+
 # Test artifacts
 tests/fixtures/output/
 .pytest_cache/

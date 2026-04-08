@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -10,6 +11,8 @@ from src.core.inference import detect_device, get_model_path, load_model, predic
 from src.core.temporal import detect_and_fix_outliers
 from src.core.video import FrameReader, get_video_info
 from src.core.writer import create_writer
+
+logger = logging.getLogger(__name__)
 
 
 class MattingPipeline:
@@ -131,6 +134,7 @@ class MattingPipeline:
         )
 
         fallback_attempted = False
+        encode_start_time = time.time()
         try:
             with writer:
                 for idx, frame in enumerate(FrameReader(input_path)):
@@ -154,10 +158,18 @@ class MattingPipeline:
 
                     if progress_callback:
                         progress_callback(idx + 1, total, "encoding")
+
+                    # Log encoding speed periodically
+                    if idx > 0 and idx % 300 == 0:
+                        elapsed = time.time() - encode_start_time
+                        encode_fps = idx / elapsed
+                        logger.info(
+                            "Encode progress: %d/%d frames, %.1f fps (%.1fs elapsed)",
+                            idx, total, encode_fps, elapsed,
+                        )
         except RuntimeError as e:
             if not fallback_attempted and self._config.encoder_type != EncoderType.SOFTWARE:
-                import logging
-                logging.warning(f"Hardware encoder failed: {e}. Falling back to software encoding.")
+                logger.warning("Hardware encoder failed: %s. Falling back to software encoding.", e)
                 fallback_attempted = True
 
                 if os.path.exists(output_path) and os.path.isfile(output_path):
@@ -180,6 +192,15 @@ class MattingPipeline:
                     self._config = old_config
                 return
             raise
+
+        encode_elapsed = time.time() - encode_start_time
+        if total > 0 and encode_elapsed > 0:
+            avg_fps = total / encode_elapsed
+            logger.info(
+                "Encode complete: %d frames in %.1fs (avg %.1f fps, %.1fx realtime at %.0ffps source)",
+                total, encode_elapsed, avg_fps,
+                avg_fps / fps if fps > 0 else 0, fps,
+            )
 
         if cancel_event and cancel_event.is_set():
             if os.path.exists(output_path) and os.path.isfile(output_path):

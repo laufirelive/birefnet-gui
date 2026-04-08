@@ -1,11 +1,14 @@
 # main.py
+import logging
 import multiprocessing
+import os
 import platform
 import shutil
 import sys
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
+from src.core.paths import get_app_root
 from src.gui.main_window import MainWindow
 
 
@@ -32,6 +35,14 @@ def _ffmpeg_install_message() -> str:
 
 def main():
     multiprocessing.freeze_support()
+    log_path = os.path.join(get_app_root(), "birefnet-gui.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+        filename=log_path,
+        filemode="w",
+    )
 
     app = QApplication(sys.argv)
     app.setApplicationName("BiRefNet Video Matting Tool")

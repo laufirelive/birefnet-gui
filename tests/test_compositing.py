@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.core.compositing import compose_frame
+from src.core.compositing import compose_frame, render_checkerboard_preview
 from src.core.config import BackgroundMode
 
 
@@ -105,3 +105,35 @@ class TestComposeSideBySide:
         result = compose_frame(sample_frame, sample_alpha, BackgroundMode.SIDE_BY_SIDE)
         assert result[0, 4, 0] == 255  # top half opaque
         assert result[3, 4, 0] == 0    # bottom half transparent
+
+
+class TestRenderCheckerboardPreview:
+    def test_output_shape_matches_input(self):
+        rgb = np.full((32, 32, 3), 200, dtype=np.uint8)
+        alpha = np.full((32, 32), 255, dtype=np.uint8)
+        result = render_checkerboard_preview(rgb, alpha, cell_size=8)
+        assert result.shape == (32, 32, 3)
+        assert result.dtype == np.uint8
+
+    def test_fully_opaque_returns_foreground(self):
+        rgb = np.full((16, 16, 3), 100, dtype=np.uint8)
+        alpha = np.full((16, 16), 255, dtype=np.uint8)
+        result = render_checkerboard_preview(rgb, alpha, cell_size=8)
+        np.testing.assert_array_equal(result, rgb)
+
+    def test_fully_transparent_returns_checkerboard(self):
+        rgb = np.full((16, 16, 3), 100, dtype=np.uint8)
+        alpha = np.zeros((16, 16), dtype=np.uint8)
+        result = render_checkerboard_preview(rgb, alpha, cell_size=8)
+        # Top-left cell should be light (#FFFFFF)
+        assert result[0, 0, 0] == 255
+        # Cell at (0, 8) should be dark (#CCCCCC)
+        assert result[0, 8, 0] == 204
+
+    def test_half_alpha_blends(self):
+        rgb = np.zeros((16, 16, 3), dtype=np.uint8)
+        alpha = np.full((16, 16), 128, dtype=np.uint8)
+        result = render_checkerboard_preview(rgb, alpha, cell_size=8)
+        # Light cell (255) blended 50% with black (0) → ~128
+        val = result[0, 0, 0]
+        assert 120 <= val <= 135
