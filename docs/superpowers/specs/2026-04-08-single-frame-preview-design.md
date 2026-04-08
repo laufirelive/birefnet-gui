@@ -157,9 +157,29 @@ def render_checkerboard_preview(rgb: np.ndarray, alpha: np.ndarray, cell_size: i
 
 放置在 `src/core/compositing.py` 中（现有合成模块）。
 
-## 7. 交互状态
+## 7. 放大查看窗口
 
-### 7.1 预览按钮状态
+### 7.1 触发
+
+点击预览窗格中的图片 → 弹出独立的 `ImageViewerDialog(QDialog)` 窗口。
+
+无论当前显示的是原始帧还是抠图结果，都可以点击放大查看。
+
+### 7.2 ImageViewerDialog
+
+- **窗口**: 无边框（`Qt.WindowType.FramelessWindowHint`），初始大小为屏幕 80%，居中显示
+- **缩放**: 鼠标滚轮缩放（以鼠标位置为中心），缩放范围 10%~500%
+- **平移**: 鼠标左键拖拽平移
+- **关闭**: 点击图片外空白区域、按 Esc 键、或双击图片关闭
+- **初始显示**: Fit-to-window（图片缩放到窗口大小，保持比例）
+
+### 7.3 实现
+
+新增 `src/gui/image_viewer.py`，包含 `ImageViewerDialog` 类。基于 `QGraphicsView` + `QGraphicsScene` 实现缩放和平移。
+
+## 8. 交互状态
+
+### 8.1 预览按钮状态
 
 | 应用状态 | 预览按钮 |
 |---------|---------|
@@ -168,28 +188,29 @@ def render_checkerboard_preview(rgb: np.ndarray, alpha: np.ndarray, cell_size: i
 | 正在预览推理 | 禁用（显示加载状态） |
 | 正在处理视频 | 禁用 |
 
-### 7.2 滑块与预览的联动
+### 8.2 滑块与预览的联动
 
 - 拖动滑块释放后 → 截取新帧显示 → **清除之前的抠图结果**（回到显示原始帧）
 - 点击预览按钮 → 对当前帧抠图 → 预览窗格切换为显示抠图结果
 - 再次拖动滑块 → 回到显示原始帧，可选择新帧再次预览
 
-### 7.3 图片输入
+### 8.3 图片输入
 
 - 图片输入时：滑块隐藏，预览窗格直接显示该图片
 - 预览按钮仍然可用，点击后执行抠图预览
 - 图片文件夹输入时：预览功能不可用（多张图片无法单帧预览）
 
-## 8. 文件变更清单
+## 9. 文件变更清单
 
 | 文件 | 变更类型 | 说明 |
 |------|---------|------|
 | `src/core/frame_extractor.py` | 新增 | FFmpeg 单帧截取 |
 | `src/core/compositing.py` | 修改 | 新增 `render_checkerboard_preview` |
 | `src/worker/preview_worker.py` | 新增 | 预览推理后台线程 |
+| `src/gui/image_viewer.py` | 新增 | 放大查看弹窗（QGraphicsView 缩放/平移） |
 | `src/gui/main_window.py` | 修改 | 布局调整 + 预览窗格 + 滑块 + 预览按钮 + 状态管理 |
 
-## 9. 不做的事
+## 10. 不做的事
 
 - 不做左右对比 / 拖拽分割线对比
 - 不做预览结果缓存（每次预览重新推理）
