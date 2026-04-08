@@ -2,7 +2,7 @@ import os
 import time
 
 from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSlider,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -73,6 +74,10 @@ class MainWindow(QMainWindow):
         self._start_time = None
         self._input_type = None
         self._current_phase = None
+        self._video_info = None
+        self._current_frame_rgb = None
+        self._displayed_rgb = None
+        self._preview_worker = None
 
         self._queue_manager = QueueManager(brm_path=BRM_PATH)
         self._queue_manager.load()
@@ -149,6 +154,34 @@ class MainWindow(QMainWindow):
         sep2.setFrameStyle(QLabel.Shape.HLine | QLabel.Shadow.Sunken)
         left_panel.addWidget(sep2)
 
+        # --- Preview pane ---
+        self._preview_label = QLabel("选择视频后预览")
+        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setStyleSheet(
+            "background: #2a2a2a; color: #888; border: 1px solid #444; border-radius: 4px;"
+        )
+        self._preview_label.setMinimumHeight(120)
+        self._preview_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._preview_label.mousePressEvent = self._on_preview_clicked
+        left_panel.addWidget(self._preview_label, stretch=1)
+
+        # Frame slider
+        self._frame_slider = QSlider(Qt.Orientation.Horizontal)
+        self._frame_slider.setEnabled(False)
+        self._frame_slider.setRange(0, 0)
+        self._frame_slider.sliderReleased.connect(self._on_slider_released)
+        left_panel.addWidget(self._frame_slider)
+
+        # Frame info label
+        self._frame_info_label = QLabel("")
+        self._frame_info_label.setStyleSheet("color: gray;")
+        left_panel.addWidget(self._frame_info_label)
+
+        # Separator before progress
+        sep3 = QLabel()
+        sep3.setFrameStyle(QLabel.Shape.HLine | QLabel.Shadow.Sunken)
+        left_panel.addWidget(sep3)
+
         # Progress
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 100)
@@ -158,8 +191,6 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("")
         self._status_label.setStyleSheet("color: gray;")
         left_panel.addWidget(self._status_label)
-
-        left_panel.addStretch()
 
         # --- Right panel: SettingsPanel ---
         self._settings_panel = SettingsPanel(MODELS_DIR, encoder_registry=self._encoder_registry)
@@ -200,6 +231,10 @@ class MainWindow(QMainWindow):
         btn_row.setContentsMargins(16, 8, 16, 8)
         btn_row.addStretch()
 
+        self._preview_btn = QPushButton("预览")
+        self._preview_btn.clicked.connect(self._on_preview)
+        btn_row.addWidget(self._preview_btn)
+
         self._start_btn = QPushButton("开始处理")
         self._start_btn.clicked.connect(self._on_start)
         btn_row.addWidget(self._start_btn)
@@ -236,12 +271,16 @@ class MainWindow(QMainWindow):
 
     def _set_state(self, state: str):
         self._state = state
+        has_input = self._input_path is not None
+        is_video = self._input_type == InputType.VIDEO
         if state == "initial":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(True)
+            self._frame_slider.setEnabled(False)
             self._progress_bar.setValue(0)
             self._status_label.setText("")
         elif state == "ready":
@@ -249,14 +288,18 @@ class MainWindow(QMainWindow):
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
+            self._preview_btn.setEnabled(has_input and self._input_type != InputType.IMAGE_FOLDER)
             self._select_btn.setEnabled(True)
+            self._frame_slider.setEnabled(is_video)
         elif state == "processing":
             self._start_btn.setEnabled(False)
             self._pause_btn.setEnabled(True)
             self._pause_btn.setText("暂停")
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._frame_slider.setEnabled(False)
             self._queue_tab._start_btn.setEnabled(False)
         elif state == "paused":
             self._start_btn.setEnabled(False)
@@ -264,15 +307,18 @@ class MainWindow(QMainWindow):
             self._pause_btn.setText("继续")
             self._cancel_btn.setEnabled(True)
             self._enqueue_btn.setEnabled(False)
+            self._preview_btn.setEnabled(False)
             self._select_btn.setEnabled(False)
+            self._frame_slider.setEnabled(False)
             self._queue_tab._start_btn.setEnabled(False)
         elif state == "finished":
             self._start_btn.setEnabled(True)
             self._pause_btn.setEnabled(False)
             self._cancel_btn.setEnabled(False)
             self._enqueue_btn.setEnabled(True)
+            self._preview_btn.setEnabled(has_input and self._input_type != InputType.IMAGE_FOLDER)
             self._select_btn.setEnabled(True)
-            # Re-enable queue start if queue is idle and has pending tasks
+            self._frame_slider.setEnabled(is_video)
             if self._queue_tab._queue_state == "idle":
                 has_pending = self._queue_manager.next_pending_task() is not None
                 self._queue_tab._start_btn.setEnabled(has_pending)
