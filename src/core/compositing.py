@@ -48,3 +48,30 @@ def compose_frame(
         return np.hstack([rgb, mask_rgb])
 
     raise ValueError(f"Unknown background mode: {mode}")
+
+
+def render_checkerboard_preview(
+    rgb: np.ndarray,
+    alpha: np.ndarray,
+    cell_size: int = 16,
+) -> np.ndarray:
+    """Composite RGB + alpha onto a checkerboard background.
+
+    Args:
+        rgb: RGB uint8 array, shape (H, W, 3).
+        alpha: uint8 array, shape (H, W), values 0-255.
+        cell_size: Size of each checkerboard square in pixels.
+
+    Returns:
+        Composited RGB uint8 array, shape (H, W, 3).
+    """
+    h, w = alpha.shape
+    # Build checkerboard: alternating 255 and 204 cells
+    rows = np.arange(h) // cell_size
+    cols = np.arange(w) // cell_size
+    checkerboard = ((rows[:, None] + cols[None, :]) % 2 == 0).astype(np.uint8)
+    bg = np.where(checkerboard[:, :, None], 255, 204).astype(np.float32)
+
+    alpha_f = alpha.astype(np.float32) / 255.0
+    blended = rgb.astype(np.float32) * alpha_f[:, :, None] + bg * (1.0 - alpha_f[:, :, None])
+    return blended.clip(0, 255).astype(np.uint8)
