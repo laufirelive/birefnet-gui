@@ -48,6 +48,8 @@ def _format_duration(seconds: float) -> str:
 class QueueTab(QWidget):
     """Queue management tab with task list, progress, and controls."""
 
+    PROGRESS_SAVE_INTERVAL_SEC = 10.0
+
     queue_running_changed = pyqtSignal(bool)
     task_count_changed = pyqtSignal(int)
 
@@ -279,6 +281,7 @@ class QueueTab(QWidget):
 
         task.status = TaskStatus.PROCESSING
         self._qm.save()
+        self._last_save_time = time.time()
         self._refresh_table()
         self._set_queue_state("running")
 
@@ -374,12 +377,17 @@ class QueueTab(QWidget):
         else:
             task.phase = ProcessingPhase.ENCODING
 
-        if phase != self._current_phase:
+        phase_changed = phase != self._current_phase
+        if phase_changed:
             self._current_phase = phase
             self._start_time = time.time()
             # Disable pause during encoding or temporal_fix — can't resume these phases
             is_non_pausable = phase in ("encoding", "temporal_fix")
             self._pause_btn.setEnabled(not is_non_pausable and self._queue_state == "running")
+            # Persist phase transition immediately so resume can restart from the latest phase.
+            self._qm.save()
+            self._refresh_table()
+            self._last_save_time = time.time()
 
         percent = int(current / total * 100) if total > 0 else 0
         self._progress_bar.setValue(percent)
@@ -401,9 +409,9 @@ class QueueTab(QWidget):
 
         self._update_total_progress()
 
-        # Throttle expensive operations: save + table refresh every 2s or 100 frames
+        # Throttle expensive operations: save + table refresh every 10s.
         now = time.time()
-        if now - self._last_save_time >= 2.0 or current % 100 == 0:
+        if not phase_changed and now - self._last_save_time >= self.PROGRESS_SAVE_INTERVAL_SEC:
             self._qm.save()
             self._refresh_table()
             self._last_save_time = now
