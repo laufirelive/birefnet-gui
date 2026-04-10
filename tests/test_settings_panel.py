@@ -38,3 +38,20 @@ def test_apply_config_updates_widget_state(qtbot, tmp_path):
     assert got.batch_size == 4
     assert got.inference_resolution == InferenceResolution.RES_512
     assert got.temporal_fix is False
+
+
+def test_get_config_falls_back_when_combo_data_missing(qtbot, tmp_path):
+    panel = SettingsPanel(str(tmp_path))
+    qtbot.addWidget(panel)
+
+    panel._mode_combo.clear()
+    panel._format_combo.clear()
+    panel._model_combo.clear()
+    panel._encoder_combo.clear()
+
+    cfg = panel.get_config()
+
+    assert cfg.model_name == "BiRefNet-general"
+    assert cfg.output_format == OutputFormat.MOV_PRORES
+    assert cfg.background_mode == BackgroundMode.TRANSPARENT
+    assert cfg.encoder_type == EncoderType.AUTO

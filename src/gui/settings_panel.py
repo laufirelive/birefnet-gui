@@ -474,10 +474,11 @@ class SettingsPanel(QWidget):
                 w.blockSignals(False)
 
     def get_config(self) -> ProcessingConfig:
+        default = ProcessingConfig()
         return ProcessingConfig(
-            model_name=self._model_combo.currentData(),
-            output_format=self._format_combo.currentData(),
-            background_mode=self._mode_combo.currentData(),
+            model_name=self._model_combo.currentData() or default.model_name,
+            output_format=self._format_combo.currentData() or OutputFormat.MOV_PRORES,
+            background_mode=self._mode_combo.currentData() or BackgroundMode.TRANSPARENT,
             bitrate_mode=self._bitrate_combo.currentData() or BitrateMode.AUTO,
             custom_bitrate_mbps=self._custom_bitrate_spin.value(),
             encoding_preset=self._preset_combo.currentData() or EncodingPreset.MEDIUM,

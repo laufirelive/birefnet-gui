@@ -286,17 +286,37 @@ class MainWindow(QMainWindow):
         return self._settings_panel.get_config()
 
     def _config_to_panel_defaults(self, cfg: ProcessingConfig) -> dict:
+        default = ProcessingConfig()
+        output_format = cfg.output_format if isinstance(cfg.output_format, OutputFormat) else default.output_format
+        background_mode = (
+            cfg.background_mode
+            if isinstance(cfg.background_mode, BackgroundMode)
+            else default.background_mode
+        )
+        bitrate_mode = cfg.bitrate_mode if isinstance(cfg.bitrate_mode, BitrateMode) else default.bitrate_mode
+        encoding_preset = (
+            cfg.encoding_preset
+            if isinstance(cfg.encoding_preset, EncodingPreset)
+            else default.encoding_preset
+        )
+        inference_resolution = (
+            cfg.inference_resolution
+            if isinstance(cfg.inference_resolution, InferenceResolution)
+            else default.inference_resolution
+        )
+        encoder_type = cfg.encoder_type if isinstance(cfg.encoder_type, EncoderType) else default.encoder_type
+        model_name = cfg.model_name if isinstance(cfg.model_name, str) and cfg.model_name else default.model_name
         return {
-            "model_name": cfg.model_name,
-            "output_format": cfg.output_format.value,
-            "background_mode": cfg.background_mode.value,
-            "bitrate_mode": cfg.bitrate_mode.value,
+            "model_name": model_name,
+            "output_format": output_format.value,
+            "background_mode": background_mode.value,
+            "bitrate_mode": bitrate_mode.value,
             "custom_bitrate_mbps": cfg.custom_bitrate_mbps,
-            "encoding_preset": cfg.encoding_preset.value,
+            "encoding_preset": encoding_preset.value,
             "batch_size": cfg.batch_size,
-            "inference_resolution": cfg.inference_resolution.value,
+            "inference_resolution": inference_resolution.value,
             "temporal_fix": cfg.temporal_fix,
-            "encoder_type": cfg.encoder_type.value,
+            "encoder_type": encoder_type.value,
         }
 
     def _panel_defaults_to_config(self, data) -> tuple[ProcessingConfig, bool]:
