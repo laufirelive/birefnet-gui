@@ -425,6 +425,54 @@ class SettingsPanel(QWidget):
         self._source_bitrate_mbps = bitrate_mbps
         self._populate_bitrate_combo()
 
+    def _set_combo_data(self, combo: QComboBox, value) -> bool:
+        for i in range(combo.count()):
+            if combo.itemData(i) == value:
+                combo.setCurrentIndex(i)
+                return True
+        return False
+
+    def apply_config(self, config: ProcessingConfig):
+        widgets = [
+            self._model_combo,
+            self._format_combo,
+            self._mode_combo,
+            self._bitrate_combo,
+            self._preset_combo,
+            self._batch_combo,
+            self._resolution_combo,
+            self._encoder_combo,
+        ]
+        for w in widgets:
+            w.blockSignals(True)
+        self._custom_bitrate_spin.blockSignals(True)
+        self._temporal_fix_checkbox.blockSignals(True)
+
+        try:
+            self._set_combo_data(self._model_combo, config.model_name)
+            self._set_combo_data(self._format_combo, config.output_format)
+
+            self._populate_mode_combo()
+            self._populate_bitrate_combo()
+            self._populate_encoder_combo()
+
+            self._set_combo_data(self._mode_combo, config.background_mode)
+            self._set_combo_data(self._bitrate_combo, config.bitrate_mode)
+            self._custom_bitrate_spin.setValue(config.custom_bitrate_mbps)
+            self._set_combo_data(self._preset_combo, config.encoding_preset)
+            self._set_combo_data(self._batch_combo, config.batch_size)
+            self._set_combo_data(self._resolution_combo, config.inference_resolution)
+            self._set_combo_data(self._encoder_combo, config.encoder_type)
+            self._temporal_fix_checkbox.setChecked(config.temporal_fix)
+
+            self._update_advanced_visibility()
+            self._update_vram_warning()
+        finally:
+            self._custom_bitrate_spin.blockSignals(False)
+            self._temporal_fix_checkbox.blockSignals(False)
+            for w in widgets:
+                w.blockSignals(False)
+
     def get_config(self) -> ProcessingConfig:
         return ProcessingConfig(
             model_name=self._model_combo.currentData(),

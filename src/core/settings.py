@@ -9,18 +9,28 @@ from dataclasses import dataclass
 class AppSettings:
     download_source: str = "hf-mirror"  # "hf-mirror", "huggingface", "custom"
     custom_endpoint: str = ""
+    panel_defaults: dict | None = None
+
+    def __post_init__(self):
+        if not isinstance(self.panel_defaults, dict):
+            self.panel_defaults = {}
 
     def to_dict(self) -> dict:
         return {
             "download_source": self.download_source,
             "custom_endpoint": self.custom_endpoint,
+            "panel_defaults": self.panel_defaults,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "AppSettings":
+        panel_defaults = data.get("panel_defaults", {})
+        if not isinstance(panel_defaults, dict):
+            panel_defaults = {}
         return cls(
             download_source=data.get("download_source", "hf-mirror"),
             custom_endpoint=data.get("custom_endpoint", ""),
+            panel_defaults=panel_defaults,
         )
 
 
