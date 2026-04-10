@@ -20,19 +20,26 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.core.data_dir import get_brm_path
+from src.core.data_dir import get_brm_path, get_settings_path
 from src.core.paths import get_models_dir
 from src.core.config import (
+    BackgroundMode,
+    BitrateMode,
+    EncoderType,
+    EncodingPreset,
     FORMAT_EXTENSIONS,
     IMAGE_EXTENSIONS,
+    InferenceResolution,
     InputType,
     MODELS,
+    OutputFormat,
     ProcessingConfig,
     VIDEO_EXTENSIONS,
 )
 from src.core.encoder_registry import EncoderRegistry
 from src.core.queue_manager import QueueManager
 from src.core.queue_task import QueueTask, TaskStatus
+from src.core.settings import load_settings, save_settings
 from src.core.video import get_video_info
 from src.gui.model_tab import ModelTab
 from src.gui.queue_tab import QueueTab
@@ -87,10 +94,13 @@ class MainWindow(QMainWindow):
 
         self._queue_manager = QueueManager(brm_path=BRM_PATH)
         self._queue_manager.load()
+        self._app_settings = load_settings(get_settings_path())
         self._notifier = Notifier()
         self._encoder_registry = EncoderRegistry()
 
         self._init_ui()
+        self._load_panel_defaults_into_ui()
+        self._settings_panel.settings_changed.connect(self._persist_panel_defaults)
         self.setAcceptDrops(True)
         self._set_state("initial")
 
@@ -274,6 +284,123 @@ class MainWindow(QMainWindow):
     def _get_config(self) -> ProcessingConfig:
         """Build ProcessingConfig from current UI selections."""
         return self._settings_panel.get_config()
+
+    def _config_to_panel_defaults(self, cfg: ProcessingConfig) -> dict:
+        default = ProcessingConfig()
+        output_format = cfg.output_format if isinstance(cfg.output_format, OutputFormat) else default.output_format
+        background_mode = (
+            cfg.background_mode
+            if isinstance(cfg.background_mode, BackgroundMode)
+            else default.background_mode
+        )
+        bitrate_mode = cfg.bitrate_mode if isinstance(cfg.bitrate_mode, BitrateMode) else default.bitrate_mode
+        encoding_preset = (
+            cfg.encoding_preset
+            if isinstance(cfg.encoding_preset, EncodingPreset)
+            else default.encoding_preset
+        )
+        inference_resolution = (
+            cfg.inference_resolution
+            if isinstance(cfg.inference_resolution, InferenceResolution)
+            else default.inference_resolution
+        )
+        encoder_type = cfg.encoder_type if isinstance(cfg.encoder_type, EncoderType) else default.encoder_type
+        model_name = cfg.model_name if isinstance(cfg.model_name, str) and cfg.model_name else default.model_name
+        return {
+            "model_name": model_name,
+            "output_format": output_format.value,
+            "background_mode": background_mode.value,
+            "bitrate_mode": bitrate_mode.value,
+            "custom_bitrate_mbps": cfg.custom_bitrate_mbps,
+            "encoding_preset": encoding_preset.value,
+            "batch_size": cfg.batch_size,
+            "inference_resolution": inference_resolution.value,
+            "temporal_fix": cfg.temporal_fix,
+            "encoder_type": encoder_type.value,
+        }
+
+    def _panel_defaults_to_config(self, data) -> tuple[ProcessingConfig, bool]:
+        default = ProcessingConfig()
+        corrected = False
+        if not isinstance(data, dict):
+            return default, True
+
+        model_name = data.get("model_name", default.model_name)
+        if not isinstance(model_name, str) or not model_name:
+            model_name = default.model_name
+            corrected = True
+
+        def parse_enum(enum_cls, key: str, fallback):
+            nonlocal corrected
+            raw = data.get(key, fallback.value)
+            try:
+                return enum_cls(raw)
+            except Exception:
+                corrected = True
+                return fallback
+
+        output_format = parse_enum(OutputFormat, "output_format", default.output_format)
+        background_mode = parse_enum(BackgroundMode, "background_mode", default.background_mode)
+        bitrate_mode = parse_enum(BitrateMode, "bitrate_mode", default.bitrate_mode)
+        encoding_preset = parse_enum(EncodingPreset, "encoding_preset", default.encoding_preset)
+        inference_resolution = parse_enum(
+            InferenceResolution, "inference_resolution", default.inference_resolution
+        )
+        encoder_type = parse_enum(EncoderType, "encoder_type", default.encoder_type)
+
+        try:
+            custom_bitrate = float(data.get("custom_bitrate_mbps", default.custom_bitrate_mbps))
+        except (TypeError, ValueError):
+            custom_bitrate = default.custom_bitrate_mbps
+            corrected = True
+
+        try:
+            batch_size = int(data.get("batch_size", default.batch_size))
+            if batch_size <= 0:
+                raise ValueError()
+        except (TypeError, ValueError):
+            batch_size = default.batch_size
+            corrected = True
+
+        temporal_fix = data.get("temporal_fix", default.temporal_fix)
+        if not isinstance(temporal_fix, bool):
+            temporal_fix = default.temporal_fix
+            corrected = True
+
+        return (
+            ProcessingConfig(
+                model_name=model_name,
+                output_format=output_format,
+                background_mode=background_mode,
+                bitrate_mode=bitrate_mode,
+                custom_bitrate_mbps=custom_bitrate,
+                encoding_preset=encoding_preset,
+                batch_size=batch_size,
+                inference_resolution=inference_resolution,
+                temporal_fix=temporal_fix,
+                encoder_type=encoder_type,
+            ),
+            corrected,
+        )
+
+    def _load_panel_defaults_into_ui(self):
+        settings_path = get_settings_path()
+        settings = load_settings(settings_path)
+        cfg, corrected = self._panel_defaults_to_config(settings.panel_defaults)
+        self._settings_panel.apply_config(cfg)
+
+        normalized = self._config_to_panel_defaults(cfg)
+        if corrected or settings.panel_defaults != normalized:
+            settings.panel_defaults = normalized
+            save_settings(settings, settings_path)
+        self._app_settings = settings
+
+    def _persist_panel_defaults(self):
+        settings_path = get_settings_path()
+        settings = load_settings(settings_path)
+        settings.panel_defaults = self._config_to_panel_defaults(self._settings_panel.get_config())
+        save_settings(settings, settings_path)
+        self._app_settings = settings
 
     def _set_state(self, state: str):
         self._state = state
@@ -801,5 +928,6 @@ class MainWindow(QMainWindow):
                 task.status = TaskStatus.PAUSED
         if self._preview_worker and self._preview_worker.isRunning():
             self._preview_worker.wait()
+        self._persist_panel_defaults()
         self._queue_manager.save()
         event.accept()
