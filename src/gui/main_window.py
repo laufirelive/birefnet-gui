@@ -471,7 +471,7 @@ class MainWindow(QMainWindow):
             self,
             "选择图片文件",
             "",
-            "图片文件 (*.png *.jpg *.jpeg *.bmp *.tiff *.tif *.webp);;所有文件 (*)",
+            "图片文件 (*.png *.jpg *.jpeg *.jpe *.jfif *.bmp *.tiff *.tif *.webp);;所有文件 (*)",
         )
         if path:
             self._handle_input(path)
@@ -506,7 +506,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "不支持的文件",
                 f"无法识别的文件类型:\n{path}\n\n"
-                "支持的格式: 视频(MP4/AVI/MOV/MKV) | 图片(PNG/JPG/TIFF/BMP/WebP)",
+                "支持的格式: 视频(MP4/AVI/MOV/MKV) | 图片(PNG/JPG/JFIF/TIFF/BMP/WebP)",
             )
             return
 

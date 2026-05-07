@@ -418,6 +418,9 @@ class SettingsPanel(QWidget):
 
     def set_input_type(self, input_type: InputType | None):
         self._input_type = input_type
+        if input_type in (InputType.IMAGE, InputType.IMAGE_FOLDER):
+            self._set_combo_data(self._format_combo, OutputFormat.PNG_SEQUENCE)
+            self._populate_mode_combo()
         self._format_combo.setEnabled(input_type == InputType.VIDEO)
         self._update_advanced_visibility()
 

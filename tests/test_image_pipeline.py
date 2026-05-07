@@ -1,7 +1,9 @@
 import os
 import threading
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from src.core.config import BackgroundMode, OutputFormat, ProcessingConfig
 
@@ -102,3 +104,56 @@ class TestImagePipeline:
                 input_path=str(tmp_path),
                 output_dir=temp_output_dir,
             )
+
+
+def _pipeline_without_model(monkeypatch, background_mode=BackgroundMode.TRANSPARENT):
+    from src.core import image_pipeline
+    from src.core.image_pipeline import ImagePipeline
+
+    pipeline = ImagePipeline.__new__(ImagePipeline)
+    pipeline._config = ProcessingConfig(background_mode=background_mode)
+    pipeline._device = "cpu"
+    pipeline._model = object()
+
+    def fake_predict(model, frame, device, resolution=1024):
+        return np.full(frame.shape[:2], 255, dtype=np.uint8)
+
+    monkeypatch.setattr(image_pipeline, "predict", fake_predict)
+    return pipeline
+
+
+def test_single_image_falls_back_when_cv2_cannot_read_jpeg(monkeypatch, tmp_path):
+    from src.core import image_pipeline
+
+    input_path = tmp_path / "input.jfif"
+    Image.new("RGB", (8, 6), (255, 0, 0)).save(input_path, "JPEG")
+    monkeypatch.setattr(image_pipeline.cv2, "imread", lambda path: None)
+
+    pipeline = _pipeline_without_model(monkeypatch)
+    result = pipeline._process_single(
+        str(input_path), str(tmp_path / "out"), None, None, None,
+    )
+
+    assert os.path.exists(result)
+    with Image.open(result) as output:
+        assert output.size == (8, 6)
+
+
+def test_folder_processes_jfif_and_jpe_images(monkeypatch, tmp_path):
+    pipeline = _pipeline_without_model(monkeypatch)
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "out"
+    input_dir.mkdir()
+    Image.new("RGB", (8, 6), (255, 0, 0)).save(input_dir / "one.jfif", "JPEG")
+    Image.new("RGB", (7, 5), (0, 255, 0)).save(input_dir / "two.jpe", "JPEG")
+
+    progress_log = []
+    result = pipeline._process_folder(
+        str(input_dir), str(output_dir),
+        lambda current, total: progress_log.append((current, total)),
+        None, None,
+    )
+
+    assert result == str(output_dir)
+    assert sorted(os.listdir(output_dir)) == ["one.png", "two.png"]
+    assert progress_log == [(1, 2), (2, 2)]

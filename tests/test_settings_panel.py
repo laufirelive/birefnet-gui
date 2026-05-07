@@ -4,6 +4,7 @@ from src.core.config import (
     EncoderType,
     EncodingPreset,
     InferenceResolution,
+    InputType,
     OutputFormat,
     ProcessingConfig,
 )
@@ -55,3 +56,25 @@ def test_get_config_falls_back_when_combo_data_missing(qtbot, tmp_path):
     assert cfg.output_format == OutputFormat.MOV_PRORES
     assert cfg.background_mode == BackgroundMode.TRANSPARENT
     assert cfg.encoder_type == EncoderType.AUTO
+
+
+def test_image_input_forces_png_format_and_keeps_background_selectable(qtbot, tmp_path):
+    panel = SettingsPanel(str(tmp_path))
+    qtbot.addWidget(panel)
+
+    panel.apply_config(
+        ProcessingConfig(
+            output_format=OutputFormat.MP4_H264,
+            background_mode=BackgroundMode.GREEN,
+        )
+    )
+    panel.set_input_type(InputType.IMAGE)
+
+    cfg = panel.get_config()
+    modes = [panel._mode_combo.itemData(i) for i in range(panel._mode_combo.count())]
+
+    assert cfg.output_format == OutputFormat.PNG_SEQUENCE
+    assert BackgroundMode.TRANSPARENT in modes
+    assert BackgroundMode.GREEN in modes
+    assert panel._format_combo.isEnabled() is False
+    assert panel._mode_combo.isEnabled() is True

@@ -102,7 +102,17 @@ class InferenceResolution(Enum):
 
 
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+IMAGE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".jpe",
+    ".jfif",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".webp",
+}
 
 
 MODELS = {

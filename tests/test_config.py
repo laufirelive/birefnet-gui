@@ -68,7 +68,10 @@ class TestFileExtensions:
         assert VIDEO_EXTENSIONS == {".mp4", ".avi", ".mov", ".mkv"}
 
     def test_image_extensions(self):
-        assert IMAGE_EXTENSIONS == {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+        assert IMAGE_EXTENSIONS == {
+            ".png", ".jpg", ".jpeg", ".jpe", ".jfif",
+            ".bmp", ".tiff", ".tif", ".webp",
+        }
 
 
 class TestModels:

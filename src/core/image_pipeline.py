@@ -5,11 +5,26 @@ from typing import Callable, Optional
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from src.core.compositing import compose_frame
 from src.core.config import IMAGE_EXTENSIONS, MODELS, ProcessingConfig
 from src.core.inference import detect_device, get_model_path, load_model, predict
+
+
+def _read_image_bgr(image_path: str) -> np.ndarray:
+    """Read still images as BGR uint8 data, falling back to Pillow for JPEG variants."""
+    frame = cv2.imread(image_path)
+    if frame is not None:
+        return frame
+
+    try:
+        with Image.open(image_path) as img:
+            img = ImageOps.exif_transpose(img)
+            rgb = np.array(img.convert("RGB"), dtype=np.uint8)
+    except Exception as e:
+        raise ValueError(f"Cannot read image: {image_path}") from e
+    return rgb[:, :, ::-1].copy()
 
 
 class ImagePipeline:
@@ -69,9 +84,7 @@ class ImagePipeline:
         progress_callback, pause_event, cancel_event,
     ) -> str:
         """Process a single image file."""
-        frame = cv2.imread(image_path)
-        if frame is None:
-            raise ValueError(f"Cannot read image: {image_path}")
+        frame = _read_image_bgr(image_path)
 
         resolution = self._config.inference_resolution.value
         alpha = predict(self._model, frame, self._device, resolution=resolution)
@@ -131,9 +144,7 @@ class ImagePipeline:
                 continue
 
             image_path = os.path.join(folder_path, filename)
-            frame = cv2.imread(image_path)
-            if frame is None:
-                continue
+            frame = _read_image_bgr(image_path)
 
             resolution = self._config.inference_resolution.value
             alpha = predict(self._model, frame, self._device, resolution=resolution)
